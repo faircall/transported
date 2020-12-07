@@ -1,0 +1,21 @@
+-Vertex buffer object:
+	Can store vertices on the GPU in its memory.
+
+-glGenBuffers(glsizeisize, gluint *buffer):
+	Will assign an integer id to the buffer.
+	Size is how many buffers you want...?
+
+-glBindBuffer(type, buffer):
+	activates a certain buffer for the state machine? 
+
+-glVertexAttribPointer:
+	what does this do exactly?
+
+-glEnableVertexAttribArray(int index):
+        Also unsure
+
+
+-Drawing with multiple VAOs, VBOs:
+	 It makes more sense to use an array of these actually
+
+			   
