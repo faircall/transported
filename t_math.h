@@ -52,10 +52,18 @@ float mat2_det(Mat2 m);
 float mat3_det(Mat3 m);
 float mat4_det(Mat4 m);
 void mat4_create_identity(Mat4 a);
+void mat4_create_scale(Mat4 a, float scalar);
 void mat4_translate(Mat4 a, Vec3 t);
 void mat4_create_x_rotation(Mat4 a, float angle);
+void mat4_create_y_rotation(Mat4 a, float angle);
+void mat4_create_z_rotation(Mat4 a, float angle);
 void mat4_create_perspective(Mat4 a, float fovy, float aspect_ratio, float near, float far);
 
+void mat4_copy(Mat4 a, Mat4 b);
+
+void mat4_transpose_in_place(Mat4 in);
+void mat4_transpose(Mat4 in, Mat4 out);
+void mat4_compare(Mat4 a, Mat4 b);
 
 
 

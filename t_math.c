@@ -217,6 +217,31 @@ void mat4_create_identity(Mat4 a)
     a[3][3] = 1.0f;
 }
 
+void mat4_create_scale(Mat4 a, float scalar)
+{
+    a[0][0] = scalar;
+    a[0][1] = 0.0f;
+    a[0][2] = 0.0f;
+    a[0][3] = 0.0f;
+
+    a[1][0] = 0.0f;
+    a[1][1] = scalar;
+    a[1][2] = 0.0f;
+    a[1][3] = 0.0f;
+
+    a[2][0] = 0.0f;
+    a[2][1] = 0.0f;
+    a[2][2] = scalar;
+    a[2][3] = 0.0f;
+
+    a[3][0] = 0.0f;
+    a[3][1] = 0.0f;
+    a[3][2] = 0.0f;
+    a[3][3] = 1.0f;
+}
+
+
+//check these for column major
 void mat4_create_x_rotation(Mat4 a, float angle)
 {
     mat4_create_identity(a);
@@ -229,25 +254,30 @@ void mat4_create_x_rotation(Mat4 a, float angle)
 void mat4_create_y_rotation(Mat4 a, float angle)
 {
     mat4_create_identity(a);
-    a[1][1] = cos(angle);
-    a[1][2] = -sin(angle);
-    a[2][1] = sin(angle);
+    a[0][0] = cos(angle);
+    a[0][2] = sin(angle);
+    a[1][1] = 1;
+    a[2][0] = -sin(angle);
     a[2][2] = cos(angle);    
 }
 
 void mat4_create_z_rotation(Mat4 a, float angle)
 {
     mat4_create_identity(a);
+    a[0][0] = cos(angle);
     a[1][1] = cos(angle);
-    a[1][2] = -sin(angle);
-    a[2][1] = sin(angle);
-    a[2][2] = cos(angle);    
+    a[1][0] = sin(angle);
+    a[0][1] = -sin(angle);    
 }
 
+
+//check for column major
 void mat4_create_perspective(Mat4 a, float fovy, float aspect_ratio, float near, float far)
 {
+
+    float fovy_degrees = (fovy * M_PI) / 180.0;
     mat4_create_identity(a);
-    float g = 1.0f / tan(fovy * 0.5f);
+    float g = 1.0f / tan(fovy_degrees * 0.5f);
     float k = far / (far - near);
     a[0][0] = g / aspect_ratio;
     a[1][1] = g;
@@ -259,6 +289,65 @@ void mat4_create_perspective(Mat4 a, float fovy, float aspect_ratio, float near,
 
 void mat4_create_infinite_perspective();
 
+
+//could create a temporary matrix in here to do this rather than
+//the in-out stuff
+void mat4_transpose(Mat4 in, Mat4 out)
+{
+    
+    out[0][0] = in[0][0];
+    out[0][1] = in[1][0];
+    out[0][2] = in[2][0];
+    out[0][3] = in[3][0];
+
+    out[1][0] = in[0][1];
+    out[1][1] = in[1][1];
+    out[1][2] = in[2][1];
+    out[1][3] = in[3][1];
+
+    out[2][0] = in[0][2];
+    out[2][1] = in[1][2];
+    out[2][2] = in[2][2];
+    out[2][3] = in[3][2];
+
+    out[3][0] = in[0][3];
+    out[3][1] = in[1][3];
+    out[3][2] = in[2][3];
+    out[3][3] = in[3][3];
+}
+
+void mat4_transpose_in_place(Mat4 in)
+{
+    //Mat4 out;
+
+    //this won't actually work!
+    for (int i = 0; i < 3; i++) {
+	for (int j = i+1; j < 4; j++) {
+
+	    //why you no work?
+	    float tmp1 = in[i][j];
+	    in[i][j] = in[j][i];
+	    in[j][i] = tmp1;
+
+
+	}
+    }
+    
+}
+
+void mat4_compare(Mat4 a, Mat4 b)
+{
+    for (int i = 0; i < 4; i++) {
+	for (int j = 0; j < 4; j++) {
+	    float a1 = a[i][j];
+	    float b1 = b[i][j];
+	    int same = a1==b1;
+	}
+    }
+}
+
+
+//check for column major
 void mat4_mult(Mat4 a, Mat4 b, Mat4 c)
 {
     c[0][0] = a[0][0]*b[0][0] +
@@ -331,3 +420,14 @@ void mat4_mult(Mat4 a, Mat4 b, Mat4 c)
 
 
 }
+
+
+void mat4_copy(Mat4 a, Mat4 b)
+{
+    for (int i = 0; i < 4; i++) {
+	for (int j = 0; j < 4; j++) {
+	    b[i][j] = a[i][j];
+	}
+    }
+}
+
