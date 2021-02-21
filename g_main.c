@@ -26,11 +26,14 @@
 
 //wrap some of the drawing code -semidone
 
-//todo: assimp for mesh/animation imports
+//todo: assimp for mesh/animation imports - semidone
 
 //todo: backface culling or discard or whatever
 
 
+//todo: some basic lighting
+//for this I think I'll need to send the transformation and perspective matrices in separately
+//so we can calculate lighting in world space
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -79,26 +82,7 @@ void draw_sky(float angle_x, int sky_shader, int sky_vao, int sky_texture, int t
     
     //pretty much got this down now
     
-    Mat4 scalar_matrix, scalar_transpose;
-    mat4_create_scale(scalar_matrix, 1.0f);
-    mat4_transpose(scalar_matrix, scalar_transpose);
-    Vec3 fixed_sky = {0.0f, 0.9f, 2.0f};
-    Mat4 tmp_trans, tmp_trans_transpose, rot_trans, rot_trans_out;
 
-    mat4_create_identity(tmp_trans);
-    mat4_create_translation(tmp_trans, fixed_sky);
-    mat4_transpose(tmp_trans, tmp_trans_transpose);
-
-    ///mat4_create_
-
-    Mat4 rotate_x, rotate_x_trans;
-    mat4_create_x_rotation(rotate_x, angle_x);
-    mat4_transpose(rotate_x, rotate_x_trans);
-
-    Mat4 tmp2;
-    mat4_mult(scalar_transpose, tmp_trans_transpose, tmp2);
-    mat4_mult(tmp2, rotate_x_trans, rot_trans);
-    mat4_mult(rot_trans, perspective, rot_trans_out);
 
     //draw it
     //how do you know where the texture is located?
@@ -110,7 +94,7 @@ void draw_sky(float angle_x, int sky_shader, int sky_vao, int sky_texture, int t
     //glUniform4f(vertex_color_location, 0.3f, green_value, 0.3f, 1.0f);
     //glUniform3f(offset_location, green_value, red_value, 0.0f);
 
-    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, rot_trans_out);
+    //glUniformMatrix4fv(transform_loc, 1, GL_FALSE, rot_trans_out);
     glBindVertexArray(sky_vao);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
@@ -118,7 +102,7 @@ void draw_sky(float angle_x, int sky_shader, int sky_vao, int sky_texture, int t
     
 }
 
-void draw_object(int model_shader, int model_vao, int vertex_count, Vec3 pos, Vec3 camera, Mat4 perspective, int transform_loc, float angle_x, float angle_y)
+void draw_object(int model_shader, int model_vao, int vertex_count, Vec3 pos, Vec3 camera, Mat4 perspective, int transform_loc, int perspective_loc, float angle_x, float angle_y)
 {
     //so in this case I think we want to
     //rotate THEN translate?
@@ -126,49 +110,38 @@ void draw_object(int model_shader, int model_vao, int vertex_count, Vec3 pos, Ve
     //rotation of like...-2.17 seems about right, but that's probably irrelevant?
     //need to remember to restrict the players ability to rubberneck
 
-    
     //pretty much got this down now
-    Mat4 tmp_translate, tmp_translate_transpose, rotate_translate, rotate_translate_perspective;
 
-    Mat4 camera_translate, camera_translate_transpose;
-    mat4_create_identity(camera_translate);
-    mat4_create_translation(camera_translate, camera);
-    mat4_transpose(camera_translate, camera_translate_transpose);
 
     
     //create rotation matrix and transpose it
-    Mat4 rotate_x, rotate_x_transpose;
-    mat4_create_x_rotation(rotate_x, angle_x);
-    mat4_transpose(rotate_x, rotate_x_transpose);
+    Mat3 rotate_x = mat3_create_rotate_x(angle_x);
 
-    Mat4 rotate_y, rotate_y_transpose;
-    mat4_create_y_rotation(rotate_y, angle_y);
-    mat4_transpose(rotate_y, rotate_y_transpose);
-
-
-    //create our translation matrix and transpose it
-    mat4_create_identity(tmp_translate);
-    mat4_create_translation(tmp_translate, camera);
-    mat4_transpose(tmp_translate, tmp_translate_transpose);
+    Mat3 rotate_y = mat3_create_rotate_y(angle_y);
 
     //multiply rotation by translation (i.e rotate then translate)
     //mat4_mult(rotate_x_transpose, tmp_translate_transpose, rotate_translate);
     //then multiply by perspective matrix
-    Mat4 rotate_x_y;
-    mat4_mult(rotate_x, rotate_y, rotate_x_y);
-    mat4_mult(rotate_x_y, tmp_translate_transpose, rotate_translate);
-    
-    mat4_mult(rotate_translate, perspective, rotate_translate_perspective);
+    Mat3 rotate_x_y = mat3_mult(rotate_y, rotate_x);
 
+    //order?
+    //
+    Mat4 model_rotation = mat4_from_mat3(rotate_x_y);
 
-    Mat4 test_identity;
-    mat4_create_identity(test_identity);
+    Mat4 model_translation = mat4_create_translation(pos);
+
+    Mat4 mrt = mat4_mult(model_translation, model_rotation);
+    //Mat4 transformation = mat4_create_translation_rotation(rotate_x_y, camera);
+
     
+    Mat4 camera_transformation = mat4_create_translation(camera);
+
+    Mat4 transformation = mat4_mult(camera_transformation, mrt);
     
     //and send to the shader
     glUseProgram(model_shader);
-    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, rotate_translate_perspective);
-
+    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, transformation.elements);
+    glUniformMatrix4fv(perspective_loc, 1, GL_FALSE, perspective.elements);
 
     glBindVertexArray(model_vao);
     glDrawArrays(GL_TRIANGLES, 0, vertex_count);
@@ -184,44 +157,7 @@ void draw_quad_model()
 
 void draw_animated_quad(Vec3 camera, Vec3 model, float model_angle, GLuint shader, GLuint vao, int time_loc, int transform_loc, float current_time)
 {
-#if 0
-    	Vec3 tmp_camera = camera;
-	//tmp_camera.x += 0.2;
-	
-	//rot_angle += dt;
 
-	mat4_create_z_rotation(test_rot_y, rot_angle);
-
-	//this requires an identity matrix to work
-	Mat4 tmp_trans;
-	mat4_create_identity(tmp_trans);
-	mat4_create_translation(tmp_trans, camera);
-	mat4_transpose(tmp_trans,test_translate);
-	Mat4 trans_rot;
-	Mat4 identity;
-	mat4_create_identity(identity);
-	Mat4 model_matrix;
-	Mat4 model_matrix_trans;
-
-	Mat4 rotate_x, rotate_x_trans;
-	mat4_create_x_rotation(rotate_x, angle_x);
-	mat4_transpose(rotate_x, rotate_x_trans);
-	
-	mat4_create_identity(model_matrix);
-	mat4_create_translation(model_matrix, triangle_pos);
-	mat4_transpose(model_matrix, model_matrix_trans);
-	Mat4 tmp_model;
-	mat4_copy(model_matrix_trans, tmp_model);
-	mat4_mult(tmp_model, rotate_x,  model_matrix_trans);
-	Mat4 trans_rot_out;
-	mat4_mult(model_matrix_trans, test_translate, trans_rot);
-
-	Mat4 perspective_out;
-	mat4_transpose(perspective, perspective_out);
-	
- 	mat4_compare(perspective_out, perspective);
-	mat4_mult(trans_rot, perspective, trans_rot_out);
-#endif    
 }
 
 int read_file_to_buffer(char **buffer, char *filename)
@@ -294,78 +230,141 @@ int load_shader_program(unsigned int *shader_program, char *vertex_filename, cha
     return 0;
 }
 
-int load_model_file(char *file_name, GLuint *vao, float **model_vertices, float **model_normals, float **model_colors, int *model_vertex_count)
+int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **model_vertices, float **model_normals, float **model_colors, int *model_vertex_count)
 {
+    //VERY dumb workaround for colors:
+    //pull the colors from the ply file
+    //pull the vertices and normals from the
+    //fbx file
 
 
+
+    
     const struct aiScene *scene = aiImportFile(file_name, aiProcess_Triangulate);
+    
+    const struct aiScene *ply_scene = aiImportFile(ply_file_name, aiProcess_Triangulate);
     if (!scene) {
+	fprintf(stderr, "Error reading mesh");
+	return -1;
+    }
+    if (!ply_scene) {
 	fprintf(stderr, "Error reading mesh");
 	return -1;
     }
 
     const struct aiMesh *mesh = scene->mMeshes[0];
+    const struct aiMesh *ply_mesh = ply_scene->mMeshes[0];
+    
     printf("%d vertices in the mesh\n", mesh->mNumVertices);
     int vertices = mesh->mNumVertices;
+    int faces = mesh->mNumFaces;
+
+    boolean has_vertices = false;
+    boolean has_normals = false;
+    boolean has_faces = false;
+    boolean has_colors = false;
+    
     *model_vertex_count = vertices;
     (*model_vertices) = (float*)malloc(sizeof(float) * vertices * 3);
     (*model_normals) = (float*)malloc(sizeof(float) * vertices * 3);
     (*model_colors) = (float*)malloc(sizeof(float) * vertices * 3);
-    for (int i = 0; i < vertices; i++) {
-	const struct aiVector3D *vp = &(mesh->mVertices[i]);
+
+
+    if (mesh->mVertices != NULL) {
+	has_vertices = true;
+	for (int i = 0; i < vertices; i++) {
+	    const struct aiVector3D *vp = &(mesh->mVertices[i]);
 	
-	(*model_vertices)[i * 3] = (float)vp->x;
-	(*model_vertices)[(i * 3) + 1] = (float)vp->y;
-	(*model_vertices)[(i * 3) + 2] = (float)vp->z;
+	    (*model_vertices)[i * 3] = (float)vp->x;
+	    (*model_vertices)[(i * 3) + 1] = (float)vp->y;
+	    (*model_vertices)[(i * 3) + 2] = (float)vp->z;
+	}
+    }
+
+    if (mesh->mNormals != NULL) {
+	has_normals = true;
+	for (int i = 0; i < vertices; i++) {
+	    const struct aiVector3D *vn = &(mesh->mNormals[i]);
+	
+	    (*model_normals)[i * 3] = (float)vn->x;
+	    (*model_normals)[(i * 3) + 1] = (float)vn->y;
+	    (*model_normals)[(i * 3) + 2] = (float)vn->z;
+	}
+    }
+
+    if (mesh->mFaces != NULL) {
+	has_faces = true;
+	for (int i = 0; i < faces; i++) {
+	    const struct aiFace *face = &(mesh->mFaces[i]);
+	    int index1 =  face->mIndices[0];
+	    int index2 = face->mIndices[1];
+	    int index3 = face->mIndices[2];
+	    float dummy = 0;
+	    continue;
+	}
     }
 
     
-    for (int i = 0; i < vertices; i++) {
-	const struct aiVector3D *vn = &(mesh->mNormals[i]);
-	
-	(*model_normals)[i * 3] = (float)vn->x;
-	(*model_normals)[(i * 3) + 1] = (float)vn->y;
-	(*model_normals)[(i * 3) + 2] = (float)vn->z;
+    //what about indices?
+    //kinda need to have averaged normals to make the smooth
+    //look work
+
+    //turns out there is an mFaces
+    //member of the struct
+
+    
+
+    if (&(ply_mesh->mColors[0][0]) != NULL) {
+	has_colors = true;
     }
-
-
-
-
+    
     for (int i = 0; i < vertices; i++) {
-	const struct aiColor4D *vc = &(mesh->mColors[0][i]);//careful here
-	//we could come back here for alphas later
-	(*model_colors)[i * 3] = (float)vc->r;
-	(*model_colors)[(i * 3) + 1] = (float)vc->g;
-	(*model_colors)[(i * 3) + 2] = (float)vc->b;
+	if (has_colors) {
+	    const struct aiColor4D *vc = &(ply_mesh->mColors[0][i]);//careful here
+	    //we could come back here for alphas later
+	    (*model_colors)[i * 3] = (float)vc->r;
+	    (*model_colors)[(i * 3) + 1] = (float)vc->g;
+	    (*model_colors)[(i * 3) + 2] = (float)vc->b;
+	} else {
+	    (*model_colors)[i * 3] = 0.5f;
+	    (*model_colors)[(i * 3) + 1] = 0.5f;
+	    (*model_colors)[(i * 3) + 2] = 0.5f;
+	}
     }
+    
 
     glGenVertexArrays(1, vao);
     glBindVertexArray(*vao);
 
-    GLuint vbo_vertices; //apparently these can be temporary since they
-    //get sent to the GPU? or is stored in the VAO?
+    if (has_vertices) {
+	GLuint vbo_vertices;
+	//get sent to the GPU? or is stored in the VAO?
 
-    glGenBuffers(1, &vbo_vertices);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_vertices);
-    glBufferData(GL_ARRAY_BUFFER, 3 * vertices * sizeof(float), *model_vertices, GL_STATIC_DRAW);
+	glGenBuffers(1, &vbo_vertices);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_vertices);
+	glBufferData(GL_ARRAY_BUFFER, 3 * vertices * sizeof(float), *model_vertices, GL_STATIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
 
-    free(*model_vertices);
+	free(*model_vertices);
+    }
 
-    GLuint vbo_normals; //apparently these can be temporary since they
+    if (has_normals) {
+	GLuint vbo_normals; 
 
-    glGenBuffers(1, &vbo_normals);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_normals);
-    glBufferData(GL_ARRAY_BUFFER, 3 * vertices * sizeof(float), *model_normals, GL_STATIC_DRAW);
+	glGenBuffers(1, &vbo_normals);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_normals);
+	glBufferData(GL_ARRAY_BUFFER, 3 * vertices * sizeof(float), *model_normals, GL_STATIC_DRAW);
 
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(1);
 
-    free(*model_normals);
+	free(*model_normals);
+    }
 
-    GLuint vbo_colors; //apparently these can be temporary since they
+
+    GLuint vbo_colors; 
 
     glGenBuffers(1, &vbo_colors);
     glBindBuffer(GL_ARRAY_BUFFER, vbo_colors);
@@ -373,9 +372,11 @@ int load_model_file(char *file_name, GLuint *vao, float **model_vertices, float 
 
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(2);
+    free(*model_colors);
 
 
     aiReleaseImport(scene);
+    aiReleaseImport(ply_scene);
     
     return 0;
 }
@@ -426,7 +427,9 @@ int main(int argc, char **argv)
     float *model_colors = NULL;
     GLuint model_vao;
     int model_load_failure;
-    model_load_failure = load_model_file("art/rudy_ply.ply", &model_vao, &model_vertices, &model_normals, &model_colors, &model_vertex_count);
+
+    // rudy_ply.ply
+    model_load_failure = load_model_file("art/rudy_dust.fbx", "art/rudy_ply.ply", &model_vao, &model_vertices, &model_normals, &model_colors, &model_vertex_count);
     if (model_load_failure) {
 	printf("Hold on a model didn't load\n");
 	return -1;
@@ -553,22 +556,22 @@ int main(int argc, char **argv)
     SDL_GL_SetSwapInterval(0);//using vsync seems to be kinda shitty?
 
    
-    Mat4 test_rot_y;
-    mat4_create_y_rotation(test_rot_y, 0.0f);
-    Mat4 test_translate;
-    mat4_create_identity(test_translate);
+
+
+
+
     Vec3 camera = vec3_init(0.0f, 0.0f, 0.0f);
     Vec3 triangle_pos = vec3_init(0.0f, 0.0f, 0.0f);
     int transform_loc = glGetUniformLocation(shader_program, "transform");
     int basic_transform_loc = glGetUniformLocation(basic_shader_program, "transform");
+    int basic_perspective_loc = glGetUniformLocation(basic_shader_program, "perspective");
     
-    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, test_rot_y);
+    
 
     float rot_angle = 0.0f;
 
-    Mat4 perspective;
-    mat4_create_perspective(perspective, 60.0f, 1280.0/720.0f, 0.1f, 100.0f);
-    mat4_transpose_in_place(perspective);
+    Mat4 perspective = mat4_create_perspective(60.0f, 1280.0/720.0f, 0.1f, 100.0f);
+    
 
     //
     float angle_x = 0.0f;
@@ -630,17 +633,17 @@ int main(int argc, char **argv)
 	}
 
 	if (keys[SDL_SCANCODE_Q]) {
-	    angle_x += dt;
+	    angle_x += 100*dt;
 	}
 	if (keys[SDL_SCANCODE_E]) {
-	    angle_x -= dt;
+	    angle_x -= 100*dt;
 	}
 
 	if (keys[SDL_SCANCODE_Z]) {
-	    angle_y += dt;
+	    angle_y += 100*dt;
 	}
 	if (keys[SDL_SCANCODE_X]) {
-	    angle_y -= dt;
+	    angle_y -= 100*dt;
 	}
 
 	//printf("x rotation is: %f degrees \n", angle_x);
@@ -648,45 +651,19 @@ int main(int argc, char **argv)
 	//printf("triangle x, y, z is : %f %f %f \n", triangle_pos.x, triangle_pos.y, triangle_pos.z);
 	
 
-	Vec3 tmp_camera = camera;
-	//tmp_camera.x += 0.2;
+
+
+
 	
-	//rot_angle += dt;
 
-	mat4_create_z_rotation(test_rot_y, rot_angle);
-
-	//this requires an identity matrix to work
-	Mat4 tmp_trans;
-	mat4_create_identity(tmp_trans);
-	mat4_create_translation(tmp_trans, camera);
-	mat4_transpose(tmp_trans,test_translate);
-	Mat4 trans_rot;
-	Mat4 identity;
-	mat4_create_identity(identity);
-	Mat4 model_matrix;
-	Mat4 model_matrix_trans;
-
-	Mat4 rotate_x, rotate_x_trans;
-	mat4_create_x_rotation(rotate_x, angle_x);
-	mat4_transpose(rotate_x, rotate_x_trans);
 	
-	mat4_create_identity(model_matrix);
-	mat4_create_translation(model_matrix, triangle_pos);
-	mat4_transpose(model_matrix, model_matrix_trans);
-	Mat4 tmp_model;
-	mat4_copy(model_matrix_trans, tmp_model);
-	mat4_mult(tmp_model, rotate_x,  model_matrix_trans);
-	Mat4 trans_rot_out;
-	mat4_mult(model_matrix_trans, test_translate, trans_rot);
-
-	Mat4 perspective_out;
-	mat4_transpose(perspective, perspective_out);
 	
- 	mat4_compare(perspective_out, perspective);
-	mat4_mult(trans_rot, perspective, trans_rot_out);
+	
+ 	
+
 	
 	total_time_ms += dt;
-	//printf("dt is %f\n", dt);
+	
 
 	float green_value = (sin(total_time_ms)/2.0f) + 0.5f;
 	float red_value = (sin(total_time_ms/2.0f)/2.0f) + 0.5f;
@@ -707,13 +684,13 @@ int main(int argc, char **argv)
 	//current_time_ms, perspective
 
 	
-	draw_sky(angle_x, shader_program, test_vaos[0], test_texture, transform_loc, time_ms_location, current_time_ms, perspective);
+	//draw_sky(angle_x, shader_program, test_vaos[0], test_texture, transform_loc, time_ms_location, current_time_ms, perspective);
 	//glUseProgram(basic_shader_program);
 	//glUniformMatrix4fv(basic_transform_loc, 1, GL_FALSE, trans_rot_out);
 	//glBindVertexArray(model_vao);
 	//glDrawArrays(GL_TRIANGLES, 0, model_vertex_count);
 	
-	draw_object(basic_shader_program, model_vao, model_vertex_count, triangle_pos, camera, perspective, basic_transform_loc, angle_x, angle_y);
+	draw_object(basic_shader_program, model_vao, model_vertex_count, triangle_pos, camera, perspective, basic_transform_loc, basic_perspective_loc, angle_x, angle_y);
 
 
 	SDL_GL_SwapWindow(window);

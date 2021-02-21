@@ -1,7 +1,14 @@
+#ifndef T_MATH_H
+#define T_MATH_H
+
 #include <math.h>
+#include <stdio.h>
 
 #define M_PI 3.1415926535
 #define M_PI_2 1.5707963267
+
+
+#define MYPI 3.1415
 
 typedef struct {
     float x;
@@ -21,49 +28,154 @@ typedef struct {
     float w;
 } Vec4;
 
+//I'm unsure if this is actually
+//getting around the issue of a bunch of
+//heap allocs
+//but it *will* make the code much easier to write
+//and I suppose I could go back and do a perf pass
+//to make these stack alloc'd if that's the better
+//option, or add that option with some extra code
+typedef struct {
+    float elements[2][2];
+} Mat2;
 
-typedef float Mat2[2][2];
-typedef float Mat3[3][3];
-typedef float Mat4[4][4];
+
+//here's where we make it column major
+#define mat2(mat,a,b) mat.elements[b][a]
+
+typedef struct {
+    float elements[3][3];
+} Mat3;
+
+
+//here's where we make it column major
+#define mat3(mat,a,b) mat.elements[b][a]
+
+
+typedef struct {
+    float elements[4][4];
+} Mat4;
+
+#define mat4(mat,a,b) mat.elements[b][a]
+
 
 Vec2 vec2_init(float x, float y);
-Vec3 vec3_init(float x, float y, float z);
-Vec4 vec4_init(float x, float y, float z, float w);
 
-Vec2 vec2_scale(float s, Vec2 v);
 Vec2 vec2_add(Vec2 a, Vec2 b);
+
 Vec2 vec2_sub(Vec2 a, Vec2 b);
-float vec2_mag(Vec2 v);
-Vec2 vec2_normalize(Vec2 v);
+
+Vec2 vec2_scale(Vec2 a, float scalar);
+
 float vec2_dot(Vec2 a, Vec2 b);
-float vec2_angle_between(Vec2 a, Vec2 b);
-float vec2_angle(Vec2 a);
 
-Vec3 vec3_scale(float s, Vec3 v);
+float vec2_mag(Vec2 a);
+
+Vec2 vec2_normalize(Vec2 a);
+
+Mat2 mat2_init_vec2(Vec2 a, Vec2 b);
+Mat2 mat2_init_float(float a00, float a01,
+		     float a10, float a11);
+
+Mat2 mat2_scale(Mat2 a, float scalar);
+
+float mat2_det(Mat2 a);
+
+Mat2 mat2_inverse(Mat2 a);
+
+Vec3 vec3_init(float x, float y, float z);
+
+
 Vec3 vec3_add(Vec3 a, Vec3 b);
+
 Vec3 vec3_sub(Vec3 a, Vec3 b);
-float vec3_mag(Vec3 v);
-Vec3 vec3_normalize(Vec3 v);
-float vec3_dot(Vec3 a, Vec3 b);
+
+Vec3 vec3_scale(Vec3 a, float scalar);
+
+
+float vec3_mag(Vec3 a);
+
+Vec3 vec3_normalize(Vec3 a);
+
+
 Vec3 vec3_cross(Vec3 a, Vec3 b);
-float vec3_scalar_triple(Vec3 a, Vec3 b, Vec3 c);
 
-float mat2_det(Mat2 m);
-float mat3_det(Mat3 m);
-float mat4_det(Mat4 m);
-void mat4_create_identity(Mat4 a);
-void mat4_create_scale(Mat4 a, float scalar);
-void mat4_translate(Mat4 a, Vec3 t);
-void mat4_create_x_rotation(Mat4 a, float angle);
-void mat4_create_y_rotation(Mat4 a, float angle);
-void mat4_create_z_rotation(Mat4 a, float angle);
-void mat4_create_perspective(Mat4 a, float fovy, float aspect_ratio, float near, float far);
+float vec3_triple(Vec3 a, Vec3 b, Vec3 c);
 
-void mat4_copy(Mat4 a, Mat4 b);
+Mat3 mat3_create_zero(void);
 
-void mat4_transpose_in_place(Mat4 in);
-void mat4_transpose(Mat4 in, Mat4 out);
-void mat4_compare(Mat4 a, Mat4 b);
+Mat3 mat3_create_identity(void);
+
+
+void mat3_print_elements(Mat3 m);
+
+
+
+Mat3 mat3_init_vec3(Vec3 a, Vec3 b, Vec3 c);
+Mat3 mat3_init_float(float a00, float a01, float a02,
+		     float a10, float a11, float a12,
+		     float a20, float a21, float a22);
+
+Mat3 mat3_mult(Mat3 a, Mat3 b);
+
+
+Mat3 mat3_transpose(Mat3 a);
+
+float mat3_det(Mat3 a);
+
+
+
+
+Mat3 mat3_adjugate(Mat3 a);
+Mat3 mat3_scale(Mat3 a, float scalar);
+Mat3 mat3_inverse(Mat3 a);
+
+Mat3 mat3_create_rotate_z(float angle);
+Mat3 mat3_create_rotate_x(float angle);
+Mat3 mat3_create_rotate_y(float angle);
+
+Vec3 vec3_from_mat3(Mat3 a, int col);
+Vec3 vec3_from_mat4(Mat4 a, int col);
+
+Mat4 mat4_create_zero(void);
+Mat4 mat4_create_identity(void);
+Mat4 mat4_mult(Mat4 a, Mat4 b);
+
+Vec4 vec4_init(float x, float y, float z, float w);
+Mat4 mat4_scale(Mat4 a, float scalar);
+
+
+
+Mat4 mat4_from_vec4_row(Vec4 r0, Vec4 r1, Vec4 r2, Vec4 r3);
+
+Mat4 mat4_from_mat3(Mat3 a);
+
+void mat4_print_elements(Mat4 m);
+
+Mat4 mat4_init(float a00, float a01, float a02, float a03,
+	       float a10, float a11, float a12, float a13,
+	       float a20, float a21, float a22, float a23,
+	       float a30, float a31, float a32, float a33);
+
+Mat4 mat4_from_vec4_col(Vec4 c0, Vec4 c1, Vec4 c2, Vec4 c3);
+
+Mat4 mat4_inverse(Mat4 a);
+
+Mat4 mat4_create_translation(Vec3 t);
+
+Mat4 mat4_create_translation_rotation(Mat3 rotation, Vec3 t);
+
+Mat4 mat4_create_perspective(float fovy, float s, float n, float f);
+
+float cos_deg(float angle);
+float sin_deg(float angle);
+float tan_deg(float angle);
+
+float deg_to_rad(float angle);
+
+
+
+#endif
 
 
 

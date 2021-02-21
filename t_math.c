@@ -1,39 +1,13 @@
 #include "t_math.h"
 
-//column major or row major?
+#include <math.h>
+
 
 Vec2 vec2_init(float x, float y)
 {
     Vec2 result;
     result.x = x;
     result.y = y;
-    return result;
-}
-
-Vec3 vec3_init(float x, float y, float z)
-{
-    Vec3 result;
-    result.x = x;
-    result.y = y;
-    result.z = z;
-    return result;
-}
-
-Vec4 vec4_init(float x, float y, float z, float w)
-{
-    Vec4 result;
-    result.x = x;
-    result.y = y;
-    result.z = z;
-    result.w = w;
-    return result;
-}
-
-Vec2 vec2_scale(float s, Vec2 v)
-{
-    Vec2 result = v;
-    result.x *= s;
-    result.y *= s;
     return result;
 }
 
@@ -53,69 +27,92 @@ Vec2 vec2_sub(Vec2 a, Vec2 b)
     return result;
 }
 
-float vec2_mag(Vec2 v)
+Vec2 vec2_scale(Vec2 a, float scalar)
 {
-    return sqrt(v.x*v.x + v.y*v.y);
-}
-
-Vec2 vec2_normalize(Vec2 v)
-{
-    float mag = vec2_mag(v);
-    Vec2 result = v;
-    if (mag != 0.0f) {
-	result.x /= mag;
-	result.y /= mag;
-    }
+    Vec2 result;
+    result.x = a.x * scalar;
+    result.y = a.y * scalar;
     return result;
 }
 
 float vec2_dot(Vec2 a, Vec2 b)
 {
-    return a.x*b.x + a.y*b.y;
+    float result = a.x*b.x + a.y*b.y;
+    return result;
 }
 
-float vec2_angle_between(Vec2 a, Vec2 b)
+float vec2_mag(Vec2 a)
 {
-    // NOTE this is given in radians
-    // dot(a,b) = mag(a)*mag(b)cos(theta)
-    float dot = vec2_dot(a, b);
-    float mag_a = vec2_mag(a);
-    float mag_b = vec2_mag(b);
-    return acos(dot/(mag_a*mag_b));
+    float result = sqrt(a.x*a.x + a.y*a.y);
+    return result;
 }
 
-float vec2_angle(Vec2 a)
+Vec2 vec2_normalize(Vec2 a)
 {
-    //NOTE this is given in radians
-    //tan = opp/adj
-    float result;
-    a = vec2_normalize(a);
-    if (a.x == 0.0f) {
-	if (a.y == 1.0f) {
-	    result = M_PI_2;
-	} else {
-	    result = 3*M_PI_2;
+    Vec2 result;
+    float mag = vec2_mag(a);
+    float inv_mag = 1.0/mag;
+    result = vec2_scale(a, inv_mag);
+    return result;
+}
+
+Mat2 mat2_init_vec2(Vec2 a, Vec2 b)
+{
+    Mat2 result;
+    mat2(result, 0, 0) = a.x;
+    mat2(result, 0, 1) = b.x;
+    mat2(result, 1, 0) = a.y;
+    mat2(result, 1, 1) = b.y;
+    return result;
+}
+
+Mat2 mat2_init_float(float a00, float a01,
+		     float a10, float a11)
+{
+    Mat2 result;
+
+    mat2(result, 0, 0) = a00;
+    mat2(result, 0, 1) = a01;
+    mat2(result, 1, 0) = a10;
+    mat2(result, 1, 1) = a11;
+    return result;
+}
+
+Mat2 mat2_scale(Mat2 a, float scalar)
+{
+    Mat2 result;
+    for (int i = 0; i < 2; i++) {
+	for (int j = 0; j < 2; j++) {
+	    mat2(result,i,j) = scalar*mat2(a,i,j);
 	}
-    } else if (a.y == 0.0f) {
-	if (a.x == 1.0f) {
-	    result = 0.0f;
-	} else {
-	    result = M_PI;
-	}
-    } else {
-	result = atan(a.y/a.x);
     }
     return result;
 }
 
-
-
-Vec3 vec3_scale(float s, Vec3 v)
+float mat2_det(Mat2 a)
 {
-    Vec3 result = v;
-    result.x *= s;
-    result.y *= s;
-    result.z *= s;
+    float result = mat2(a,0,0)*mat2(a,1,1) - mat2(a,0,1)*mat2(a,1,0);
+    return result;
+}
+
+Mat2 mat2_inverse(Mat2 a)
+{
+    float det = mat2_det(a);
+    Mat2 result;
+    mat2(result,0,0) = mat2(a,1,1);
+    mat2(result,1,1) = mat2(a,0,0);
+    mat2(result,0,1) = -mat2(a,0,1);
+    mat2(result,1,0) = -mat2(a,1,0);
+    result = mat2_scale(result, det);
+    return result;
+}
+
+Vec3 vec3_init(float x, float y, float z)
+{
+    Vec3 result;
+    result.x = x;
+    result.y = y;
+    result.z = z;
     return result;
 }
 
@@ -137,297 +134,611 @@ Vec3 vec3_sub(Vec3 a, Vec3 b)
     return result;
 }
 
-float vec3_mag(Vec3 v)
+Vec3 vec3_scale(Vec3 a, float scalar)
 {
-    return sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
-}
-
-Vec3 vec3_normalize(Vec3 v)
-{
-    float mag = vec3_mag(v);
-    Vec3 result = v;
-    if (mag != 0.0f) {
-	result.x /= mag;
-	result.y /= mag;
-	result.z /= mag;
-    }
+    Vec3 result;
+    result.x = a.x * scalar;
+    result.y = a.y * scalar;
+    result.z = a.z * scalar;
     return result;
 }
 
+float vec3_mag(Vec3 a)
+{
+    float result = sqrt(a.x*a.x + a.y*a.y + a.z*a.z);
+    return result;
+}
+
+Vec3 vec3_normalize(Vec3 a)
+{
+    Vec3 result;
+    float mag = vec3_mag(a);
+    float inv_mag = 1.0/mag;
+    result = vec3_scale(a, inv_mag);
+    return result;
+}
 
 float vec3_dot(Vec3 a, Vec3 b)
 {
-    return a.x*b.x + a.y*b.y + a.z*b.z;
+    float result = a.x*b.x + a.y*b.y + a.z*b.z;
+    return result;
 }
 
 Vec3 vec3_cross(Vec3 a, Vec3 b)
 {
-    //note the cross product of parallel vectors is zero
     Vec3 result;
-
-    result.x = a.y*b.z - a.z*b.y;
-    result.y = a.z*b.x - a.x*b.z;
-    result.z = a.x*b.y - a.y*b.x;
-    
+    result.x = a.y*b.z - b.y*a.z;
+    result.y = a.z*b.x - b.z*a.x;
+    result.z = a.x*b.y - b.x*a.y;
     return result;
 }
 
-float vec3_scalar_triple(Vec3 a, Vec3 b, Vec3 c)
+float vec3_triple(Vec3 a, Vec3 b, Vec3 c)
 {
-    //this looks useful for getting angles
-    float result;    
-    result = vec3_dot(vec3_cross(a,b), c);
+    float result = vec3_dot(vec3_cross(a,b), c);
+    return result;
+}
+
+Mat3 mat3_init_float(float a00, float a01, float a02,
+		     float a10, float a11, float a12,
+		     float a20, float a21, float a22)
+{
+    Mat3 result;
+    mat3(result, 0, 0) = a00;
+    mat3(result, 0, 1) = a01;
+    mat3(result, 0, 2) = a02;
+
+    mat3(result, 1, 0) = a10;
+    mat3(result, 1, 1) = a11;
+    mat3(result, 1, 2) = a12;
+
+    mat3(result, 2, 0) = a20;
+    mat3(result, 2, 1) = a21;
+    mat3(result, 2, 2) = a22;
+
+    return result;
+}
+
+Mat3 mat3_init_vec3(Vec3 a, Vec3 b, Vec3 c)		    
+{
+    Mat3 result;
+    mat3(result, 0, 0) = a.x;
+    mat3(result, 0, 1) = b.x;
+    mat3(result, 0, 2) = c.x;
+
+    mat3(result, 1, 0) = a.y;
+    mat3(result, 1, 1) = b.y;
+    mat3(result, 1, 2) = c.y;
+
+    mat3(result, 2, 0) = a.z;
+    mat3(result, 2, 1) = b.z;
+    mat3(result, 2, 2) = c.z;
+
+    return result;
+}
+
+Mat3 mat3_create_zero(void)
+{
+    Mat3 result;
+    for (int i = 0; i < 3; i++) {
+	for (int j = 0; j < 3; j++) {
+	    mat3(result, i, j) = 0;
+	}
+    }
+    return result;
+}
+
+Mat3 mat3_create_identity(void)
+{
+    Mat3 result;
+    result = mat3_create_zero();
+    mat3(result, 0, 0) = 1;
+    mat3(result, 1, 1) = 1;
+    mat3(result, 2, 2) = 1;
+    return result;
+}
+
+void mat3_print_elements(Mat3 m)
+{
+    for (int i = 0; i < 3; i++) {
+	for (int j = 0; j < 3; j++) {
+	    printf("row %d col %d has element %f\n", i, j, mat3(m, i, j));
+	}
+    }
+}
+
+Mat3 mat3_mult(Mat3 a, Mat3 b)
+{
+    //this is easy to code but probably slow atm
+    //so do an optimization pass later
+    Mat3 result;
+    //result = mat3_create_zero();
+    for (int i = 0; i < 3; i++) {
+	for (int j = 0; j < 3; j++) {
+	    mat3(result, i, j) = 0;
+	    for (int k = 0; k < 3; k++) {
+		mat3(result, i, j) += mat3(a,i,k)*mat3(b,k,j);
+	    }
+	}
+    }
+
+    return result;
+}
+
+Mat3 mat3_transpose(Mat3 a)
+{
+    Mat3 result;
+    for (int i = 0; i < 3; i++) {
+	for (int j = 0; j < 3; j++) {
+	    mat3(result, i, j) = mat3(a, j, i);
+	}
+    }
+    return result;
+}
+
+float mat3_det(Mat3 a)
+{
+    //the determinant of a 3x3 matrix
+    //is equal to the scalar triple product
+    //of the column vectors of the matrix
+
+    //insane how much more
+    //compact this is
+    Vec3 va = vec3_from_mat3(a,0);
+    Vec3 vb = vec3_from_mat3(a,1);
+    Vec3 vc = vec3_from_mat3(a,2);
+    float result = vec3_triple(va,vb,vc);
     return result;
 }
 
 #if 0
-float mat3_det(Mat3 m)
+float mat3_det(Mat3 a)
 {
-    return ();
+    //use the explicit formula
+    float t1 = mat3(a,0,0)*mat3(a,1,1)*mat3(a,2,2);
+    float t2 = mat3(a,0,1)*mat3(a,1,2)*mat3(a,2,0);
+    float t3 = mat3(a,0,2)*mat3(a,1,0)*mat3(a,2,1);
+    
+    float t4 = mat3(a,0,0)*mat3(a,1,2)*mat3(a,2,1);
+    float t5 = mat3(a,0,1)*mat3(a,1,0)*mat3(a,2,2);
+    float t6 = mat3(a,0,2)*mat3(a,1,1)*mat3(a,2,0);
+
+    float result = t1 + t2 + t3 - t4 - t5 - t6;
+    return result;
 }
 #endif
 
-void mat4_create_translation(Mat4 a, Vec3 t)
+Mat3 mat3_adjugate(Mat3 a)
+//I *think* this is correct but a typo is quite possible,
+//better to make a function which
+//generates arbitrary adjugate matrices
 {
-    a[0][3] = t.x;
-    a[1][3] = t.y;
-    a[2][3] = t.z;
+    float a00 = mat3(a,1,1)*mat3(a,2,2) - mat3(a,1,2)*mat3(a,2,1);
+    float a01 = mat3(a,0,2)*mat3(a,2,1) - mat3(a,0,1)*mat3(a,2,2);
+    float a02 = mat3(a,0,1)*mat3(a,1,2) - mat3(a,0,2)*mat3(a,1,1);
+
+    float a10 = mat3(a,1,2)*mat3(a,2,0) - mat3(a,1,0)*mat3(a,2,2);
+    float a11 = mat3(a,0,0)*mat3(a,2,2) - mat3(a,0,2)*mat3(a,2,0);
+    float a12 = mat3(a,0,2)*mat3(a,1,0) - mat3(a,0,0)*mat3(a,1,2);
+
+    float a20 = mat3(a,1,0)*mat3(a,2,1) - mat3(a,1,1)*mat3(a,2,0);
+    float a21 = mat3(a,0,1)*mat3(a,2,0) - mat3(a,0,0)*mat3(a,2,1);
+    float a22 = mat3(a,0,0)*mat3(a,1,1) - mat3(a,0,1)*mat3(a,1,0);
+
+    Mat3 result = mat3_init_float(a00, a01, a02,
+				  a10, a11, a12,
+				  a20, a21, a22);
+    return result;
 }
 
-void mat4_create_identity(Mat4 a)
+Mat3 mat3_scale(Mat3 a, float scalar)
 {
-    a[0][0] = 1.0f;
-    a[0][1] = 0.0f;
-    a[0][2] = 0.0f;
-    a[0][3] = 0.0f;
-
-    a[1][0] = 0.0f;
-    a[1][1] = 1.0f;
-    a[1][2] = 0.0f;
-    a[1][3] = 0.0f;
-
-    a[2][0] = 0.0f;
-    a[2][1] = 0.0f;
-    a[2][2] = 1.0f;
-    a[2][3] = 0.0f;
-
-    a[3][0] = 0.0f;
-    a[3][1] = 0.0f;
-    a[3][2] = 0.0f;
-    a[3][3] = 1.0f;
-}
-
-void mat4_create_scale(Mat4 a, float scalar)
-{
-    a[0][0] = scalar;
-    a[0][1] = 0.0f;
-    a[0][2] = 0.0f;
-    a[0][3] = 0.0f;
-
-    a[1][0] = 0.0f;
-    a[1][1] = scalar;
-    a[1][2] = 0.0f;
-    a[1][3] = 0.0f;
-
-    a[2][0] = 0.0f;
-    a[2][1] = 0.0f;
-    a[2][2] = scalar;
-    a[2][3] = 0.0f;
-
-    a[3][0] = 0.0f;
-    a[3][1] = 0.0f;
-    a[3][2] = 0.0f;
-    a[3][3] = 1.0f;
-}
-
-
-//check these for column major
-void mat4_create_x_rotation(Mat4 a, float angle)
-{
-    mat4_create_identity(a);
-    a[1][1] = cos(angle);
-    a[1][2] = -sin(angle);
-    a[2][1] = sin(angle);
-    a[2][2] = cos(angle);    
-}
-
-void mat4_create_y_rotation(Mat4 a, float angle)
-{
-    mat4_create_identity(a);
-    a[0][0] = cos(angle);
-    a[0][2] = sin(angle);
-    a[1][1] = 1;
-    a[2][0] = -sin(angle);
-    a[2][2] = cos(angle);    
-}
-
-void mat4_create_z_rotation(Mat4 a, float angle)
-{
-    mat4_create_identity(a);
-    a[0][0] = cos(angle);
-    a[1][1] = cos(angle);
-    a[1][0] = sin(angle);
-    a[0][1] = -sin(angle);    
-}
-
-
-//check for column major
-void mat4_create_perspective(Mat4 a, float fovy, float aspect_ratio, float near, float far)
-{
-
-    float fovy_degrees = (fovy * M_PI) / 180.0;
-    mat4_create_identity(a);
-    float g = 1.0f / tan(fovy_degrees * 0.5f);
-    float k = far / (far - near);
-    a[0][0] = g / aspect_ratio;
-    a[1][1] = g;
-    a[2][2] = k;
-    a[2][3] = -near * k;
-    a[3][2] = 1.0f;
-    a[3][3] = 0.0f;
-}
-
-void mat4_create_infinite_perspective();
-
-
-//could create a temporary matrix in here to do this rather than
-//the in-out stuff
-void mat4_transpose(Mat4 in, Mat4 out)
-{
-    
-    out[0][0] = in[0][0];
-    out[0][1] = in[1][0];
-    out[0][2] = in[2][0];
-    out[0][3] = in[3][0];
-
-    out[1][0] = in[0][1];
-    out[1][1] = in[1][1];
-    out[1][2] = in[2][1];
-    out[1][3] = in[3][1];
-
-    out[2][0] = in[0][2];
-    out[2][1] = in[1][2];
-    out[2][2] = in[2][2];
-    out[2][3] = in[3][2];
-
-    out[3][0] = in[0][3];
-    out[3][1] = in[1][3];
-    out[3][2] = in[2][3];
-    out[3][3] = in[3][3];
-}
-
-void mat4_transpose_in_place(Mat4 in)
-{
-    //Mat4 out;
-
-    //this won't actually work!
+    Mat3 result;
     for (int i = 0; i < 3; i++) {
-	for (int j = i+1; j < 4; j++) {
+	for (int j = 0; j < 3; j++) {
+	    mat3(result,i,j) = mat3(a,i,j)*scalar;
+	}
+    }
+    return result;
+}
+    
 
-	    //why you no work?
-	    float tmp1 = in[i][j];
-	    in[i][j] = in[j][i];
-	    in[j][i] = tmp1;
+Mat3 mat3_inverse(Mat3 a)
+{
+    //oh yeah, check if det is zero...
+    float det = mat3_det(a);
+    if (det == 0.0f) {
+	//handle degenerate case
+    }
+    float inv_det = 1.0f/det;
+    Mat3 adj = mat3_adjugate(a);
+    Mat3 result = mat3_scale(adj, inv_det);
+    return result;
+}
+
+Mat3 mat3_create_rotate_z(float angle)
+{
+    Mat3 result = mat3_create_identity();
+    mat3(result, 0, 0) = cos_deg(angle);
+    mat3(result, 1, 1) = cos_deg(angle);
+    mat3(result, 0, 1) = -sin_deg(angle);
+    mat3(result, 1, 0) = sin_deg(angle);
+    return result;
+}
+
+Mat3 mat3_create_rotate_x(float angle)
+{
+    Mat3 result = mat3_create_identity();
+    mat3(result, 1, 1) = cos_deg(angle);
+    mat3(result, 2, 2) = cos_deg(angle);
+    mat3(result, 1, 2) = -sin_deg(angle);
+    mat3(result, 2, 1) = sin_deg(angle);
+    return result;
+}
+
+Mat3 mat3_create_rotate_y(float angle)
+{
+    Mat3 result = mat3_create_identity();
+    mat3(result, 0, 0) = cos_deg(angle);
+    mat3(result, 2, 2) = cos_deg(angle);
+    mat3(result, 0, 2) = sin_deg(angle);
+    mat3(result, 2, 0) = -sin_deg(angle);
+    return result;
+}
 
 
+
+Mat4 mat4_create_zero(void)
+{
+    Mat4 result;
+        for (int i = 0; i < 4; i++) {
+	    for (int j = 0; j < 4; j++) {
+		mat4(result, i, j) = 0;
+	    }
+    }
+    return result;    
+}
+
+Mat4 mat4_create_identity(void)
+{
+    Mat4 result;
+    result = mat4_create_zero();
+    mat4(result, 0, 0) = 1.0f;
+    mat4(result, 1, 1) = 1.0f;
+    mat4(result, 2, 2) = 1.0f;
+    mat4(result, 3, 3) = 1.0f;
+    return result;
+}
+
+Mat4 mat4_create_translation(Vec3 t)
+{
+    Mat4 result = mat4_create_identity();
+    mat4(result, 0, 3) = t.x;
+    mat4(result, 1, 3) = t.y;
+    mat4(result, 2, 3) = t.z;
+    return result;
+}
+
+Mat4 mat4_create_translation_rotation(Mat3 rotation, Vec3 t)
+{
+    Mat4 result = mat4_create_identity();
+    for (int i = 0; i < 3; i++) {
+	for (int j = 0; j < 3; j++) {
+	    mat4(result, i, j) = mat3(rotation, i, j);
+	}
+    }
+    mat4(result, 0, 3) = t.x;
+    mat4(result, 1, 3) = t.y;
+    mat4(result, 2, 3) = t.z;
+
+    return result;
+}
+
+Mat4 mat4_create_perspective(float fovy, float aspect, float near, float far)
+{
+    //s is aspect_ratio
+    //n is near
+    //f is far
+
+    //I feel like the aspect ratio is not quite right
+    float g = 1.0f / tan_deg(fovy * 0.5f);
+    float k = far / (far - near);
+
+    Mat4 result = mat4_create_identity();
+    #if 1
+    mat4(result, 0, 0) = g/aspect;
+    mat4(result, 1, 1) = g;
+    mat4(result, 2, 2) = k;
+    mat4(result, 2, 3) = -near*k;
+    mat4(result, 3, 2) = 1.0f;
+    mat4(result, 3, 3) = 0.0f;
+    #endif
+    return result;
+}
+
+Mat4 mat4_mult(Mat4 a, Mat4 b)
+{
+    Mat4 result;
+    for (int i = 0; i < 4; i++) {
+	for (int j = 0; j < 4; j++) {
+	    mat4(result, i, j) = 0;
+	    for (int k = 0; k < 4; k++) {
+		mat4(result, i, j) += mat4(a,i,k)*mat4(b,k,j);
+	    }
+	}
+    }
+
+    return result;
+}
+
+Vec3 vec3_from_mat3(Mat3 a, int col)
+{
+    //extracts a vec3 from a column of A
+    Vec3 result;
+    result.x = mat3(a, 0, col);
+    result.y = mat3(a, 1, col);
+    result.z = mat3(a, 2, col);
+    return result;
+}
+
+Vec3 vec3_from_mat4(Mat4 a, int col)
+{
+    //extracts a vec3 from a column of A
+    Vec3 result;
+    result.x = mat4(a, 0, col);
+    result.y = mat4(a, 1, col);
+    result.z = mat4(a, 2, col);
+    return result;
+}
+
+Mat4 mat4_inverse(Mat4 a)
+{
+
+    //seeeeems to work except
+    //just note we'll have negative zero floats due
+    //to the structure
+    Vec3 va = vec3_from_mat4(a, 0);
+    Vec3 vb = vec3_from_mat4(a, 1);
+    Vec3 vc = vec3_from_mat4(a, 2);
+    Vec3 vd = vec3_from_mat4(a, 3);
+
+    float x = mat4(a,3,0);
+    float y = mat4(a,3,1);
+    float z = mat4(a,3,2);
+    float w = mat4(a,3,3);
+
+    Vec3 s = vec3_cross(va, vb);
+    Vec3 t = vec3_cross(vc, vd);
+    Vec3 u = vec3_sub(vec3_scale(va, y), vec3_scale(vb, x));
+    Vec3 v = vec3_sub(vec3_scale(vc, w), vec3_scale(vd, z));
+
+    float det = vec3_dot(s,v) + vec3_dot(t,u);
+    if (det == 0.0f) {
+	//handle degenerate case
+    }
+    float inv_det = 1.0f/det;
+
+    //check equation 1.99 from Lengyel
+
+    Vec3 r0_v3 = vec3_add(vec3_cross(vb,v), vec3_scale(t, y));
+    Vec4 r0 = vec4_init(r0_v3.x, r0_v3.y, r0_v3.z, -vec3_dot(vb,t));
+
+    Vec3 r1_v3 = vec3_sub(vec3_cross(v, va), vec3_scale(t, x));
+    Vec4 r1 = vec4_init(r1_v3.x, r1_v3.y, r1_v3.z, vec3_dot(va, t));
+
+    Vec3 r2_v3 = vec3_add(vec3_cross(vd, u), vec3_scale(s, w));
+    Vec4 r2 = vec4_init(r2_v3.x, r2_v3.y, r2_v3.z, -vec3_dot(vd, s));
+
+    Vec3 r3_v3 = vec3_sub(vec3_cross(u, vc), vec3_scale(s, z));
+    Vec4 r3 = vec4_init(r3_v3.x, r3_v3.y, r3_v3.z, vec3_dot(vc, s));
+
+    Mat4 row_matrix = mat4_from_vec4_row(r0, r1, r2, r3);
+
+    Mat4 result = mat4_scale(row_matrix, inv_det);
+    return result;
+			
+}
+
+Vec4 vec4_init(float x, float y, float z, float w)
+{
+    Vec4 result;
+    result.x = x;
+    result.y = y;
+    result.z = z;
+    result.w = w;
+    return result;
+}
+
+Vec4 vec4_add(Vec4 a, Vec4 b)
+{
+    Vec4 result;
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    result.z = a.z + b.z;
+    result.w = a.w + b.w;
+    return result;
+}
+
+Vec4 vec4_sub(Vec4 a, Vec4 b)
+{
+    Vec4 result;
+    result.x = a.x - b.x;
+    result.y = a.y - b.y;
+    result.z = a.z - b.z;
+    result.w = a.w - b.w;
+    return result;
+}
+
+Vec4 vec4_scale(Vec4 a, float scalar)
+{
+    Vec4 result;
+    result.x = a.x * scalar;
+    result.y = a.y * scalar;
+    result.z = a.z * scalar;
+    result.w = a.w * scalar;
+    return result;
+}
+
+
+float vec4_mag(Vec4 a)
+{
+    float result = sqrt(a.x*a.x + a.y*a.y + a.z*a.z +a.w*a.w);
+    return result;
+}
+
+Vec4 vec4_normalize(Vec4 a)
+{
+    Vec4 result;
+    float mag = vec4_mag(a);
+    float inv_mag = 1.0/mag;
+    result = vec4_scale(a, inv_mag);
+    return result;
+}
+
+float vec4_dot(Vec4 a, Vec4 b)
+{
+    float result = a.x*b.x + a.y*b.y + a.z*b.z + a.w*a.w;
+    return result;
+}
+
+Mat4 mat4_scale(Mat4 a, float scalar)
+{
+    Mat4 result;
+    for (int i = 0; i < 4; i++) {
+	for (int j = 0; j < 4; j++) {
+	    mat4(result, i, j) = mat4(a, i, j) * scalar;
+	}
+    }
+
+    return result;
+}
+
+Mat4 mat4_from_vec4_row(Vec4 r0, Vec4 r1, Vec4 r2, Vec4 r3)
+{
+    Mat4 result;
+
+    mat4(result, 0, 0) = r0.x;
+    mat4(result, 0, 1) = r0.y;
+    mat4(result, 0, 2) = r0.z;
+    mat4(result, 0, 3) = r0.w;
+
+    mat4(result, 1, 0) = r1.x;
+    mat4(result, 1, 1) = r1.y;
+    mat4(result, 1, 2) = r1.z;
+    mat4(result, 1, 3) = r1.w;
+
+    mat4(result, 2, 0) = r2.x;
+    mat4(result, 2, 1) = r2.y;
+    mat4(result, 2, 2) = r2.z;
+    mat4(result, 2, 3) = r2.w;
+
+    mat4(result, 3, 0) = r3.x;
+    mat4(result, 3, 1) = r3.y;
+    mat4(result, 3, 2) = r3.z;
+    mat4(result, 3, 3) = r3.w;
+    
+    
+    return result;
+}
+
+Mat4 mat4_from_vec4_col(Vec4 c0, Vec4 c1, Vec4 c2, Vec4 c3)
+{
+    Mat4 result;
+
+    mat4(result, 0, 0) = c0.x;
+    mat4(result, 1, 0) = c0.y;
+    mat4(result, 2, 0) = c0.z;
+    mat4(result, 3, 0) = c0.w;
+
+    mat4(result, 0, 1) = c1.x;
+    mat4(result, 1, 1) = c1.y;
+    mat4(result, 2, 1) = c1.z;
+    mat4(result, 3, 1) = c1.w;
+    
+    mat4(result, 0, 2) = c2.x;
+    mat4(result, 1, 2) = c2.y;
+    mat4(result, 2, 2) = c2.z;
+    mat4(result, 3, 2) = c2.w;
+
+    mat4(result, 0, 3) = c3.x;
+    mat4(result, 1, 3) = c3.y;
+    mat4(result, 2, 3) = c3.z;
+    mat4(result, 3, 3) = c3.w;
+
+    
+    return result;
+}
+
+
+
+
+Mat4 mat4_init(float a00, float a01, float a02, float a03,
+	       float a10, float a11, float a12, float a13,
+	       float a20, float a21, float a22, float a23,
+	       float a30, float a31, float a32, float a33)
+{
+    Mat4 result;
+
+    mat4(result, 0, 0) = a00;
+    mat4(result, 0, 1) = a01;
+    mat4(result, 0, 2) = a02;
+    mat4(result, 0, 3) = a03;
+
+    mat4(result, 1, 0) = a10;
+    mat4(result, 1, 1) = a11;
+    mat4(result, 1, 2) = a12;
+    mat4(result, 1, 3) = a13;
+
+    mat4(result, 2, 0) = a20;
+    mat4(result, 2, 1) = a21;
+    mat4(result, 2, 2) = a22;
+    mat4(result, 2, 3) = a23;
+
+    mat4(result, 3, 0) = a30;
+    mat4(result, 3, 1) = a31;
+    mat4(result, 3, 2) = a32;
+    mat4(result, 3, 3) = a33;
+
+    return result;
+}
+
+Mat4 mat4_from_mat3(Mat3 a)
+{
+    Mat4 result = mat4_create_identity();
+
+    for (int i = 0; i < 3; i++) {
+	for (int j = 0; j < 3; j++) {
+	    mat4(result, i, j) = mat3(a, i, j);
 	}
     }
     
+    return result;
 }
 
-void mat4_compare(Mat4 a, Mat4 b)
+void mat4_print_elements(Mat4 m)
 {
     for (int i = 0; i < 4; i++) {
 	for (int j = 0; j < 4; j++) {
-	    float a1 = a[i][j];
-	    float b1 = b[i][j];
-	    int same = a1==b1;
+	    printf("element %d, %d is %f\n", i, j, mat4(m, i, j));
 	}
     }
 }
 
 
-//check for column major
-void mat4_mult(Mat4 a, Mat4 b, Mat4 c)
+float deg_to_rad(float angle)
 {
-    c[0][0] = a[0][0]*b[0][0] +
-	      a[0][1]*b[1][0] +
-	      a[0][2]*b[2][0] +
-	      a[0][3]*b[3][0];
-    c[0][1] = a[0][0]*b[0][1] +
-	      a[0][1]*b[1][1] +
-	      a[0][2]*b[2][1] +
-	      a[0][3]*b[3][1];
-    c[0][2] = a[0][0]*b[0][2] +
-	      a[0][1]*b[1][2] +
-	      a[0][2]*b[2][2] +
-	      a[0][3]*b[3][2];
-    c[0][3] = a[0][0]*b[0][3] +
-	      a[0][1]*b[1][3] +
-	      a[0][2]*b[2][3] +
-	      a[0][3]*b[3][3];
-
-    c[1][0] = a[1][0]*b[0][0] +
-	      a[1][1]*b[1][0] +
-	      a[1][2]*b[2][0] +
-	      a[1][3]*b[3][0];
-    c[1][1] = a[1][0]*b[0][1] +
-	      a[1][1]*b[1][1] +
-	      a[1][2]*b[2][1] +
-	      a[1][3]*b[3][1];
-    c[1][2] = a[1][0]*b[0][2] +
-	      a[1][1]*b[1][2] +
-	      a[1][2]*b[2][2] +
-	      a[1][3]*b[3][2];
-    c[1][3] = a[1][0]*b[0][3] +
-	      a[1][1]*b[1][3] +
-	      a[1][2]*b[2][3] +
-	      a[1][3]*b[3][3];
-
-    c[2][0] = a[2][0]*b[0][0] +
-	      a[2][1]*b[1][0] +
-	      a[2][2]*b[2][0] +
-	      a[2][3]*b[3][0];
-    c[2][1] = a[2][0]*b[0][1] +
-	      a[2][1]*b[1][1] +
-	      a[2][2]*b[2][1] +
-	      a[2][3]*b[3][1];
-    c[2][2] = a[2][0]*b[0][2] +
-	      a[2][1]*b[1][2] +
-	      a[2][2]*b[2][2] +
-	      a[2][3]*b[3][2];
-    c[2][3] = a[2][0]*b[0][3] +
-	      a[2][1]*b[1][3] +
-	      a[2][2]*b[2][3] +
-	      a[2][3]*b[3][3];
-
-    c[3][0] = a[3][0]*b[0][0] +
-	      a[3][1]*b[1][0] +
-	      a[3][2]*b[2][0] +
-	      a[3][3]*b[3][0];
-    c[3][1] = a[3][0]*b[0][1] +
-	      a[3][1]*b[1][1] +
-	      a[3][2]*b[2][1] +
-	      a[3][3]*b[3][1];
-    c[3][2] = a[3][0]*b[0][2] +
-	      a[3][1]*b[1][2] +
-	      a[3][2]*b[2][2] +
-	      a[3][3]*b[3][2];
-    c[3][3] = a[3][0]*b[0][3] +
-	      a[3][1]*b[1][3] +
-	      a[3][2]*b[2][3] +
-	      a[3][3]*b[3][3];
-
-
+    return (angle * MYPI) / 180.0f;
 }
 
-
-void mat4_copy(Mat4 a, Mat4 b)
+float cos_deg(float angle)
 {
-    for (int i = 0; i < 4; i++) {
-	for (int j = 0; j < 4; j++) {
-	    b[i][j] = a[i][j];
-	}
-    }
+    return cos(deg_to_rad(angle));
 }
-
+float sin_deg(float angle)
+{
+    return sin(deg_to_rad(angle));
+}
+float tan_deg(float angle)
+{
+    return tan(deg_to_rad(angle));
+}
