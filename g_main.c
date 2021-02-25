@@ -57,6 +57,7 @@
 //todo: clean up shader boilerplate
 
 typedef unsigned int boolean;
+typedef unsigned int uint;
 
 typedef struct {
     float r;
@@ -70,6 +71,41 @@ typedef struct {
     float b;
     float a;
 } Color4;
+
+typedef struct {
+    float *vertices;
+    float *normals;
+    float *colors;
+    Mat4 *bone_offset_matrices;
+} Model_Info;
+
+Mat4 mat4_from_assimp_mat4(struct aiMatrix4x4 m)
+{
+    Mat4 result;
+    //meta-programming would make this way less painful
+    //column major?
+    mat4(result, 0, 0) = m.a1;
+    mat4(result, 0, 1) = m.b1;
+    mat4(result, 0, 2) = m.c1;
+    mat4(result, 0, 3) = m.d1;
+
+    mat4(result, 1, 0) = m.a2;
+    mat4(result, 1, 1) = m.b2;
+    mat4(result, 1, 2) = m.c2;
+    mat4(result, 1, 3) = m.d2;
+
+    mat4(result, 2, 0) = m.a3;
+    mat4(result, 2, 1) = m.b3;
+    mat4(result, 2, 2) = m.c3;
+    mat4(result, 2, 3) = m.d3;
+
+    mat4(result, 3, 0) = m.a4;
+    mat4(result, 3, 1) = m.b4;
+    mat4(result, 3, 2) = m.c4;
+    mat4(result, 3, 3) = m.d4;
+
+    return result;
+}
 
 void draw_sky(float angle_x, int sky_shader, int sky_vao, int sky_texture, int transform_loc, int time_ms_loc, float current_time_ms, Mat4 perspective)
 {
@@ -230,14 +266,21 @@ int load_shader_program(unsigned int *shader_program, char *vertex_filename, cha
     return 0;
 }
 
-int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **model_vertices, float **model_normals, float **model_colors, int *model_vertex_count)
+int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **model_vertices, float **model_normals, float **model_colors, Mat4 **bone_offset_matrices, GLint **bone_ids, int *model_vertex_count)
 {
     //VERY dumb workaround for colors:
     //pull the colors from the ply file
     //pull the vertices and normals from the
     //fbx file
 
+    //maybe faceplam question: why are these NULL pointers valid
+    //when I assign them values via a de-reference?
 
+    //a: it's not de-referencing it per-se
+    //when you have e.g *mesh, that's de-referencing
+    //the **, and we passed in **, so it
+    //is actually just setting the pointer
+    //which exists outside this scope
 
     
     const struct aiScene *scene = aiImportFile(file_name, aiProcess_Triangulate);
@@ -252,24 +295,55 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
 	return -1;
     }
 
-    const struct aiMesh *mesh = scene->mMeshes[0];
+    //it seems like the fbx one
+    //contains the bones
+    const struct aiMesh *mesh = scene->mMeshes[0];//fbx one
     const struct aiMesh *ply_mesh = ply_scene->mMeshes[0];
     
     printf("%d vertices in the mesh\n", mesh->mNumVertices);
     int vertices = mesh->mNumVertices;
     int faces = mesh->mNumFaces;
+    int bones = mesh->mNumBones;
 
     boolean has_vertices = false;
     boolean has_normals = false;
     boolean has_faces = false;
     boolean has_colors = false;
+    boolean has_bones = false;
+
     
     *model_vertex_count = vertices;
+    //should these be conditional? probably
     (*model_vertices) = (float*)malloc(sizeof(float) * vertices * 3);
     (*model_normals) = (float*)malloc(sizeof(float) * vertices * 3);
     (*model_colors) = (float*)malloc(sizeof(float) * vertices * 3);
+    (*bone_offset_matrices) = (Mat4*)malloc(sizeof(Mat4) * bones);
 
 
+    if (bones != 0) {
+	has_bones = true;
+	for (int i = 0; i < bones; i++) {
+	    //mName
+	    //mNumweights
+	    //mWeights
+	    //mOffsetMatrix
+
+	    //we want ids / names?
+	    //weights
+	    const struct aiBone *bone = mesh->mBones[i];
+
+	    (*bone_offset_matrices)[i] = mat4_from_assimp_mat4(bone->mOffsetMatrix);
+
+	    //get weights here later
+
+	    uint num_weights = bone->mNumWeights;
+
+	    //
+	    
+
+	}
+    }
+    
     if (mesh->mVertices != NULL) {
 	has_vertices = true;
 	for (int i = 0; i < vertices; i++) {
@@ -425,11 +499,13 @@ int main(int argc, char **argv)
     float *model_vertices = NULL;
     float *model_normals = NULL;
     float *model_colors = NULL;
+    Mat4 **bone_offset_matrices = NULL;
+    GLint *bone_ids = NULL;
     GLuint model_vao;
     int model_load_failure;
 
     // rudy_ply.ply
-    model_load_failure = load_model_file("art/rudy_dust.fbx", "art/rudy_ply.ply", &model_vao, &model_vertices, &model_normals, &model_colors, &model_vertex_count);
+    model_load_failure = load_model_file("art/rudy_rigged.fbx", "art/rudy_rigged.ply", &model_vao, &model_vertices, &model_normals, &model_colors, &bone_offset_matrices, &bone_ids, &model_vertex_count);
     if (model_load_failure) {
 	printf("Hold on a model didn't load\n");
 	return -1;

@@ -1,3 +1,6 @@
+-When working with Assimp in C:
+    -all those 'structs' from cpp need to be prefixed as struct in C (they aren't typedefed)
+
 -Vertex buffer object:
 	Can store vertices on the GPU in its memory.
 
