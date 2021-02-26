@@ -31,9 +31,7 @@
 //todo: backface culling or discard or whatever
 
 
-//todo: some basic lighting
-//for this I think I'll need to send the transformation and perspective matrices in separately
-//so we can calculate lighting in world space
+//todo: point sprite rendering
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -53,6 +51,8 @@
 #define false 0
 
 #define DEBUG 1
+
+#define PARTICLE_COUNT 300
 
 //todo: clean up shader boilerplate
 
@@ -185,6 +185,40 @@ void draw_object(int model_shader, int model_vao, int vertex_count, Vec3 pos, Ve
 
 
     
+}
+
+void draw_particles(int particle_shader, int particle_vao, int particle_count, float current_time_ms, Vec3 emitter_pos, Vec3 camera, Mat4 perspective, int transform_loc, int perspective_loc, int particle_time_loc, int particle_emitter_loc)
+{
+
+
+
+
+
+
+    
+    Mat4 camera_transformation = mat4_create_translation(camera);
+
+    
+    //and send to the shader
+    glUseProgram(particle_shader);
+    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, camera_transformation.elements);
+    glUniformMatrix4fv(perspective_loc, 1, GL_FALSE, perspective.elements);
+
+    
+    glEnable(GL_PROGRAM_POINT_SIZE);
+    glEnable(GL_BLEND);
+
+    glUniform1f(particle_time_loc, current_time_ms);
+    //more uniforms to go
+
+    glUniform3f(particle_emitter_loc, emitter_pos.x, emitter_pos.y, emitter_pos.z);
+
+	
+    glBindVertexArray(particle_vao);
+    glDrawArrays(GL_POINTS, 0, PARTICLE_COUNT);
+    glDisable(GL_BLEND);
+    glDisable(GL_PROGRAM_POINT_SIZE);
+
 }
 
 void draw_quad_model()
@@ -455,6 +489,52 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
     return 0;
 }
 
+int generate_particles(GLuint *vao)
+{
+    float vertex_velocities[PARTICLE_COUNT * 3];
+    float vertex_times[PARTICLE_COUNT];
+
+    float time_accumulator = 0.0f;
+
+    int j = 0;
+
+    for (int i = 0; i < PARTICLE_COUNT; i++) {
+	vertex_times[i] = time_accumulator;
+	time_accumulator += 0.01f;
+
+	float x_vel = ((float)rand() / (float)RAND_MAX) * 1.0f - 0.5f; //uhh...
+	float y_vel = 1.0f;
+	float z_vel = ((float)rand() / (float)RAND_MAX) * 1.0f - 0.5f; //uhh...
+
+	vertex_velocities[j] = x_vel;
+	vertex_velocities[j + 1] = y_vel;
+	vertex_velocities[j + 2] = z_vel;
+	
+	j += 3;
+    }
+
+    GLuint velocity_vbo;
+    glGenBuffers(1, &velocity_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, velocity_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_velocities), vertex_velocities, GL_STATIC_DRAW);
+
+    GLuint time_vbo;
+    glGenBuffers(1, &time_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, time_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_times), vertex_times, GL_STATIC_DRAW);
+
+    glGenVertexArrays(1, vao);
+    glBindVertexArray(*vao);
+    glBindBuffer(GL_ARRAY_BUFFER, velocity_vbo);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+    glBindBuffer(GL_ARRAY_BUFFER, time_vbo);
+    glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, NULL);
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
@@ -515,6 +595,12 @@ int main(int argc, char **argv)
 	0, 1, 2,
 	2, 1, 3
     };
+
+    GLuint particle_vao;
+    generate_particles(&particle_vao);
+
+    
+    
     
 #if 0
     float tex_coords[] = {
@@ -540,7 +626,12 @@ int main(int argc, char **argv)
 	return -1;
     }
 
-
+    unsigned int particle_shader_program;
+    shader_fault = load_shader_program(&particle_shader_program, "particle.vert", "particle.frag");
+    if (shader_fault) {
+	printf("your shader has a problem homie\n");
+	return -1;
+    }
 
 
     unsigned int test_vaos[1];
@@ -641,7 +732,11 @@ int main(int argc, char **argv)
     int transform_loc = glGetUniformLocation(shader_program, "transform");
     int basic_transform_loc = glGetUniformLocation(basic_shader_program, "transform");
     int basic_perspective_loc = glGetUniformLocation(basic_shader_program, "perspective");
-    
+
+    int particle_transform_loc = glGetUniformLocation(particle_shader_program, "transform");
+    int particle_perspective_loc = glGetUniformLocation(particle_shader_program, "perspective");
+    int particle_emitter_loc = glGetUniformLocation(particle_shader_program, "emitter_position_world");
+    int particle_time_loc = glGetUniformLocation(particle_shader_program, "time_elapsed");
     
 
     float rot_angle = 0.0f;
@@ -656,7 +751,9 @@ int main(int argc, char **argv)
 
 
     float resolution[2] = {(float)SCREENWIDTH, (float)SCREENHEIGHT};
-    glUniform2f(res_location, resolution[0], resolution[1]); 
+    glUniform2f(res_location, resolution[0], resolution[1]);
+
+    
     
     while (running) {
 	current_time = SDL_GetTicks();
@@ -768,6 +865,9 @@ int main(int argc, char **argv)
 	
 	draw_object(basic_shader_program, model_vao, model_vertex_count, triangle_pos, camera, perspective, basic_transform_loc, basic_perspective_loc, angle_x, angle_y);
 
+
+	Vec3 emitter_pos = vec3_init(0.0f, 0.0f, 1.0f);
+	draw_particles(particle_shader_program, particle_vao, PARTICLE_COUNT, current_time_ms, emitter_pos, camera, perspective, particle_transform_loc, particle_perspective_loc, particle_time_loc, particle_emitter_loc);
 
 	SDL_GL_SwapWindow(window);
     }
