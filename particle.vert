@@ -24,6 +24,7 @@ void main()
     position += v_i * t + 0.5 * acceleration * t * t;
 
     opacity = 1.0f - (t / 3.0f);
+    //opacity = 1.0f;
 
     gl_Position = perspective * transform * vec4(position, 1.0f);
     gl_PointSize = 15.0f;

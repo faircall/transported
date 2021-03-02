@@ -32,6 +32,12 @@
 
 
 //todo: point sprite rendering
+//partially done, work on the alpha blending
+//done
+//well technically this is a particle system-
+//we actually want to do something slightly different for point sprite
+
+//next: return to work on the animation system.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -207,6 +213,7 @@ void draw_particles(int particle_shader, int particle_vao, int particle_count, f
     
     glEnable(GL_PROGRAM_POINT_SIZE);
     glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     glUniform1f(particle_time_loc, current_time_ms);
     //more uniforms to go
@@ -486,6 +493,43 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
     aiReleaseImport(scene);
     aiReleaseImport(ply_scene);
     
+    return 0;
+}
+
+int load_points(GLuint *vao, Mat4 *bone_matrices, int bone_count)
+{
+    float *points;
+
+    points = (float*)malloc(sizeof(float) * bone_count * 3);
+
+    //extract the poitns from the bone matrices here?
+    for (int i = 0; i < bone_count; i++) {
+	//check this
+	Mat4 m = bone_matrices[i];
+	//want the x y z translation componenents
+	float x = mat4(m, 0, 3);
+	float y = mat4(m, 1, 3);
+	float z = mat4(m, 2, 3);
+	points[i*3] = -x;
+	points[i*3 + 1] = -y;
+	points[i*3 + 2] = -z;
+    }
+    //
+
+    GLuint vbo_points;
+    glGenBuffers(1, &vbo_points);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_points);
+    glBufferData(GL_ARRAY_BUFFER, 3 * bone_count * sizeof(float), points, GL_STATIC_DRAW);
+
+    glGenVertexArrays(1, vao);
+    glBindVertexArray(*vao);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_points);
+    
+    glVertexAttribPointer(0, 3, GL_FLOAT< GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    
+    free(points);
+
     return 0;
 }
 
