@@ -7,7 +7,8 @@
 //todo: redo matrix code to be column-major rather than row-major, avoid having to transpose each frame
 
 
-//todo:
+//todo:mouselook
+//(via quaternions?)
 
 //todo: quaternion rotation
 //todo: geometric algebra support (rotors bivectors etc)
@@ -37,7 +38,13 @@
 //well technically this is a particle system-
 //we actually want to do something slightly different for point sprite
 
-//next: return to work on the animation system.
+
+
+
+
+
+//NEXT: return to work on the animation system.
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -195,12 +202,6 @@ void draw_object(int model_shader, int model_vao, int vertex_count, Vec3 pos, Ve
 
 void draw_particles(int particle_shader, int particle_vao, int particle_count, float current_time_ms, Vec3 emitter_pos, Vec3 camera, Mat4 perspective, int transform_loc, int perspective_loc, int particle_time_loc, int particle_emitter_loc)
 {
-
-
-
-
-
-
     
     Mat4 camera_transformation = mat4_create_translation(camera);
 
@@ -307,12 +308,14 @@ int load_shader_program(unsigned int *shader_program, char *vertex_filename, cha
     return 0;
 }
 
-int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **model_vertices, float **model_normals, float **model_colors, Mat4 **bone_offset_matrices, GLint **bone_ids, int *model_vertex_count)
+int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **model_vertices, float **model_normals, float **model_colors, Mat4 **bone_offset_matrices, GLint **bone_ids, int *model_vertex_count, int *bone_count)
 {
     //VERY dumb workaround for colors:
     //pull the colors from the ply file
     //pull the vertices and normals from the
     //fbx file
+
+    //what about the bones??
 
     //maybe faceplam question: why are these NULL pointers valid
     //when I assign them values via a de-reference?
@@ -345,6 +348,7 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
     int vertices = mesh->mNumVertices;
     int faces = mesh->mNumFaces;
     int bones = mesh->mNumBones;
+    (*bone_count) = bones;
 
     boolean has_vertices = false;
     boolean has_normals = false;
@@ -361,8 +365,12 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
     (*bone_offset_matrices) = (Mat4*)malloc(sizeof(Mat4) * bones);
 
 
+    
+
     if (bones != 0) {
 	has_bones = true;
+	(*bone_ids) = (int*)malloc(sizeof(int) * vertices);//because each vertex has a bone id
+	
 	for (int i = 0; i < bones; i++) {
 	    //mName
 	    //mNumweights
@@ -478,17 +486,25 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
 	free(*model_normals);
     }
 
+    if (has_bones) {
+	GLuint vbo_bone_ids;
+	glGenBuffers(1, &vbo_bone_ids);
 
-    GLuint vbo_colors; 
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_bone_ids);
+	//glBufferData(GL_ARRAY_BUFFER, 
+    }
 
-    glGenBuffers(1, &vbo_colors);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_colors);
-    glBufferData(GL_ARRAY_BUFFER, 3 * vertices * sizeof(float), *model_colors, GL_STATIC_DRAW);
+    if (has_colors) {
+	GLuint vbo_colors; 
 
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(2);
-    free(*model_colors);
+	glGenBuffers(1, &vbo_colors);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_colors);
+	glBufferData(GL_ARRAY_BUFFER, 3 * vertices * sizeof(float), *model_colors, GL_STATIC_DRAW);
 
+	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(2);
+	free(*model_colors);
+    }
 
     aiReleaseImport(scene);
     aiReleaseImport(ply_scene);
@@ -507,12 +523,15 @@ int load_points(GLuint *vao, Mat4 *bone_matrices, int bone_count)
 	//check this
 	Mat4 m = bone_matrices[i];
 	//want the x y z translation componenents
-	float x = mat4(m, 0, 3);
-	float y = mat4(m, 1, 3);
-	float z = mat4(m, 2, 3);
-	points[i*3] = -x;
-	points[i*3 + 1] = -y;
-	points[i*3 + 2] = -z;
+	float x = mat4(m, 3, 0);
+	float y = mat4(m, 3, 1);
+	float z = mat4(m, 3, 2);
+	//something off here?
+	//or are 'bone positions'
+	//related to the pose?
+	points[i*3] = x;
+	points[i*3 + 1] = y;
+	points[i*3 + 2] = z;
     }
     //
 
@@ -525,7 +544,7 @@ int load_points(GLuint *vao, Mat4 *bone_matrices, int bone_count)
     glBindVertexArray(*vao);
     glBindBuffer(GL_ARRAY_BUFFER, vbo_points);
     
-    glVertexAttribPointer(0, 3, GL_FLOAT< GL_FALSE, 3 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     
     free(points);
@@ -595,7 +614,7 @@ int main(int argc, char **argv)
     }
 
     //OpenGL init stuff
-    glEnable(GL_DEPTH_TEST);
+    //glEnable(GL_DEPTH_TEST);
 
     
     boolean running = true;
@@ -620,20 +639,29 @@ int main(int argc, char **argv)
     //then we translate/rotate those?
 
     int model_vertex_count;
+    int bone_count;
     float *model_vertices = NULL;
     float *model_normals = NULL;
     float *model_colors = NULL;
-    Mat4 **bone_offset_matrices = NULL;
+    Mat4 *bone_offset_matrices = NULL;
     GLint *bone_ids = NULL;
     GLuint model_vao;
     int model_load_failure;
 
     // rudy_ply.ply
-    model_load_failure = load_model_file("art/rudy_rigged.fbx", "art/rudy_rigged.ply", &model_vao, &model_vertices, &model_normals, &model_colors, &bone_offset_matrices, &bone_ids, &model_vertex_count);
+    model_load_failure = load_model_file("art/rudy_rigged.fbx", "art/rudy_rigged.ply", &model_vao, &model_vertices, &model_normals, &model_colors, &bone_offset_matrices, &bone_ids, &model_vertex_count, &bone_count);
     if (model_load_failure) {
 	printf("Hold on a model didn't load\n");
 	return -1;
     }
+
+    GLuint bone_debug_vao;
+    load_points(&bone_debug_vao, bone_offset_matrices, bone_count);
+
+
+    
+    
+
     
     unsigned int vertex_indices_a[] = {
 	0, 1, 2,
@@ -672,6 +700,13 @@ int main(int argc, char **argv)
 
     unsigned int particle_shader_program;
     shader_fault = load_shader_program(&particle_shader_program, "particle.vert", "particle.frag");
+    if (shader_fault) {
+	printf("your shader has a problem homie\n");
+	return -1;
+    }
+
+    unsigned int point_shader_program;
+    shader_fault = load_shader_program(&point_shader_program, "point.vert", "point.frag");
     if (shader_fault) {
 	printf("your shader has a problem homie\n");
 	return -1;
@@ -729,7 +764,7 @@ int main(int argc, char **argv)
      * ************ */
     glUseProgram(shader_program);
 
-
+    //WRAP THIS
     //load image
     int imwidth, imheight, nchannels;
     unsigned char *imdata = stbi_load("art/crap_cloud.png", &imwidth, &imheight, &nchannels, 0);
@@ -913,6 +948,18 @@ int main(int argc, char **argv)
 	Vec3 emitter_pos = vec3_init(0.0f, 0.0f, 1.0f);
 	draw_particles(particle_shader_program, particle_vao, PARTICLE_COUNT, current_time_ms, emitter_pos, camera, perspective, particle_transform_loc, particle_perspective_loc, particle_time_loc, particle_emitter_loc);
 
+	int point_perspective_loc = glGetUniformLocation(point_shader_program, "perspective");
+	int point_transform_loc = glGetUniformLocation(point_shader_program, "transform");
+	glUseProgram(point_shader_program);
+	glUniformMatrix4fv(point_perspective_loc, 1, GL_FALSE, perspective.elements);
+	Mat4 transform = mat4_create_translation(camera);
+	glUniformMatrix4fv(point_transform_loc, 1, GL_FALSE, transform.elements);
+	
+	glUseProgram(point_shader_program);
+	glBindVertexArray(bone_debug_vao);
+	glEnable(GL_PROGRAM_POINT_SIZE);
+	glDrawArrays(GL_POINTS, 0, bone_count);
+	glDisable(GL_PROGRAM_POINT_SIZE);
 	SDL_GL_SwapWindow(window);
     }
     
