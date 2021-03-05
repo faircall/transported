@@ -2,6 +2,7 @@
 layout (location = 0) in vec3 vp;
 layout (location = 1) in vec3 vn;
 layout (location = 2) in vec3 vc;
+layout (location = 3) in int bone_id;
 
 uniform mat4 transform;
 //this is actually combined model-view
@@ -9,6 +10,9 @@ uniform mat4 transform;
 //to separate to model / view 
 
 uniform mat4 perspective;
+
+//careful with this
+uniform mat4 bone_matrices[32];
 
        
 out vec3 vertex_color;
@@ -30,5 +34,5 @@ void main()
     //note that transpose-inverse is commutative (i.e same as inverse-transpose)
     vertex_normal = normalize(mat3(transpose(inverse(transform)))*vn);
 
-    gl_Position = transform_perspective * vec4(vp, 1.0f);    
+    gl_Position = transform_perspective * bone_matrices[bone_id] * vec4(vp, 1.0f);    
 }

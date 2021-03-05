@@ -67,6 +67,8 @@
 
 #define PARTICLE_COUNT 300
 
+#define MAX_BONES 32 //enough?
+
 //todo: clean up shader boilerplate
 
 typedef unsigned int boolean;
@@ -357,6 +359,8 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
     boolean has_bones = false;
 
     
+    
+    
     *model_vertex_count = vertices;
     //should these be conditional? probably
     (*model_vertices) = (float*)malloc(sizeof(float) * vertices * 3);
@@ -370,6 +374,7 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
     if (bones != 0) {
 	has_bones = true;
 	(*bone_ids) = (int*)malloc(sizeof(int) * vertices);//because each vertex has a bone id
+	
 	
 	for (int i = 0; i < bones; i++) {
 	    //mName
@@ -388,6 +393,13 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
 	    uint num_weights = bone->mNumWeights;
 
 	    //
+	    for (int j = 0; j < num_weights; j++) {
+		aiVertexWeight weight = bone->mWeights[j];
+		int vertex_id = (int)weight.mVertexId;
+		if (weight.mWeight >= 0.5f) {
+		    bone_ids[vertex_id] = i;//is this the bone ID? prolly
+		}
+	    }
 	    
 
 	}
@@ -491,7 +503,12 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
 	glGenBuffers(1, &vbo_bone_ids);
 
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_bone_ids);
-	//glBufferData(GL_ARRAY_BUFFER, 
+	
+	glBufferData(GL_ARRAY_BUFFER, vertices * sizeof(GLint), bone_ids, GL_STATIC_DRAW);
+
+	glVertexAttribIPointer(3, 1, GL_INT, 0, (void*)0);//this is different!
+	glEnableVertexAttribArray(3);
+	free(bone_ids);
     }
 
     if (has_colors) {
@@ -529,9 +546,9 @@ int load_points(GLuint *vao, Mat4 *bone_matrices, int bone_count)
 	//something off here?
 	//or are 'bone positions'
 	//related to the pose?
-	points[i*3] = x;
-	points[i*3 + 1] = y;
-	points[i*3 + 2] = z;
+	points[i*3] = -x;
+	points[i*3 + 1] = -y;
+	points[i*3 + 2] = -z;
     }
     //
 
@@ -946,13 +963,17 @@ int main(int argc, char **argv)
 
 
 	Vec3 emitter_pos = vec3_init(0.0f, 0.0f, 1.0f);
-	draw_particles(particle_shader_program, particle_vao, PARTICLE_COUNT, current_time_ms, emitter_pos, camera, perspective, particle_transform_loc, particle_perspective_loc, particle_time_loc, particle_emitter_loc);
+	//draw_particles(particle_shader_program, particle_vao, PARTICLE_COUNT, current_time_ms, emitter_pos, camera, perspective, particle_transform_loc, particle_perspective_loc, particle_time_loc, particle_emitter_loc);
 
 	int point_perspective_loc = glGetUniformLocation(point_shader_program, "perspective");
 	int point_transform_loc = glGetUniformLocation(point_shader_program, "transform");
 	glUseProgram(point_shader_program);
 	glUniformMatrix4fv(point_perspective_loc, 1, GL_FALSE, perspective.elements);
-	Mat4 transform = mat4_create_translation(camera);
+	//Mat4 transform = mat4_create_translation(camera);
+	Mat3 rotate_x = mat3_create_rotate_x(angle_x + 90.0f);
+	Mat3 rotate_y = mat3_create_rotate_y(angle_y);
+	Mat3 rotation = mat3_mult(rotate_x, rotate_y);
+	Mat4 transform = mat4_create_translation_rotation(rotation, camera);
 	glUniformMatrix4fv(point_transform_loc, 1, GL_FALSE, transform.elements);
 	
 	glUseProgram(point_shader_program);
