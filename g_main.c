@@ -4,11 +4,9 @@
 #include "stb_image.h"
 
 
-//todo: redo matrix code to be column-major rather than row-major, avoid having to transpose each frame
-
 
 //todo:mouselook
-//(via quaternions?)
+//(eventually via quaternions??)
 
 //todo: quaternion rotation
 //todo: geometric algebra support (rotors bivectors etc)
@@ -31,12 +29,6 @@
 
 //todo: backface culling or discard or whatever
 
-
-//todo: point sprite rendering
-//partially done, work on the alpha blending
-//done
-//well technically this is a particle system-
-//we actually want to do something slightly different for point sprite
 
 
 
@@ -153,7 +145,7 @@ void draw_sky(float angle_x, int sky_shader, int sky_vao, int sky_texture, int t
     
 }
 
-void draw_object(int model_shader, int model_vao, int vertex_count, Vec3 pos, Vec3 camera, Mat4 perspective, int transform_loc, int perspective_loc, float angle_x, float angle_y)
+void draw_object(int model_shader, int model_vao, int vertex_count, Vec3 pos, Vec3 camera, Mat4 perspective, Mat4 *bone_offset_matrices, int transform_loc, int perspective_loc, int *bone_matrices_locations, float angle_x, float angle_y)
 {
     //so in this case I think we want to
     //rotate THEN translate?
@@ -177,7 +169,7 @@ void draw_object(int model_shader, int model_vao, int vertex_count, Vec3 pos, Ve
 
     //order?
     //
-    Mat4 model_rotation = mat4_from_mat3(rotate_x_y);
+    Mat4 model_rotation = mat4_from_mat3(rotate_x);
 
     Mat4 model_translation = mat4_create_translation(pos);
 
@@ -191,7 +183,18 @@ void draw_object(int model_shader, int model_vao, int vertex_count, Vec3 pos, Ve
     
     //and send to the shader
     glUseProgram(model_shader);
-    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, transformation.elements);
+    //glUniformMatrix4fv(transform_loc, 1, GL_FALSE, transformation.elements);
+
+    ///it'sss wooooorking
+
+    int bone_number = 3;
+    
+    Mat4 inverse_offset = mat4_inverse(bone_offset_matrices[bone_number]);
+
+    Mat4 animation_matrix = mat4_mult(mat4_mult(bone_offset_matrices[bone_number], model_rotation), inverse_offset);
+    
+    glUniformMatrix4fv(bone_matrices_locations[bone_number], 1, GL_FALSE, animation_matrix.elements);
+    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, camera_transformation.elements);
     glUniformMatrix4fv(perspective_loc, 1, GL_FALSE, perspective.elements);
 
     glBindVertexArray(model_vao);
@@ -394,10 +397,10 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
 
 	    //
 	    for (int j = 0; j < num_weights; j++) {
-		aiVertexWeight weight = bone->mWeights[j];
+		struct aiVertexWeight weight = bone->mWeights[j];
 		int vertex_id = (int)weight.mVertexId;
 		if (weight.mWeight >= 0.5f) {
-		    bone_ids[vertex_id] = i;//is this the bone ID? prolly
+		    (*bone_ids)[vertex_id] = i;//is this the bone ID? prolly
 		}
 	    }
 	    
@@ -504,11 +507,11 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
 
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_bone_ids);
 	
-	glBufferData(GL_ARRAY_BUFFER, vertices * sizeof(GLint), bone_ids, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, vertices * sizeof(GLint), *bone_ids, GL_STATIC_DRAW);
 
 	glVertexAttribIPointer(3, 1, GL_INT, 0, (void*)0);//this is different!
 	glEnableVertexAttribArray(3);
-	free(bone_ids);
+	free(*bone_ids);
     }
 
     if (has_colors) {
@@ -849,6 +852,19 @@ int main(int argc, char **argv)
     float resolution[2] = {(float)SCREENWIDTH, (float)SCREENHEIGHT};
     glUniform2f(res_location, resolution[0], resolution[1]);
 
+    int bone_matrices_locations[MAX_BONES];
+
+    Mat4 test_identity = mat4_create_identity();
+
+    glUseProgram(basic_shader_program);
+
+    char mat_name[64];
+    for (int i = 0; i < MAX_BONES; i++) {
+	sprintf(mat_name, "bone_matrices[%i]", i);//quite slick!
+	bone_matrices_locations[i] = glGetUniformLocation(basic_shader_program, mat_name);
+	glUniformMatrix4fv(bone_matrices_locations[i], 1, GL_FALSE, test_identity.elements);
+    }
+
     
     
     while (running) {
@@ -959,7 +975,7 @@ int main(int argc, char **argv)
 	//glBindVertexArray(model_vao);
 	//glDrawArrays(GL_TRIANGLES, 0, model_vertex_count);
 	
-	draw_object(basic_shader_program, model_vao, model_vertex_count, triangle_pos, camera, perspective, basic_transform_loc, basic_perspective_loc, angle_x, angle_y);
+	draw_object(basic_shader_program, model_vao, model_vertex_count, triangle_pos, camera, perspective, bone_offset_matrices, basic_transform_loc, basic_perspective_loc, bone_matrices_locations, angle_x, angle_y);
 
 
 	Vec3 emitter_pos = vec3_init(0.0f, 0.0f, 1.0f);
