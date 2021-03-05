@@ -145,7 +145,7 @@ void draw_sky(float angle_x, int sky_shader, int sky_vao, int sky_texture, int t
     
 }
 
-void draw_object(int model_shader, int model_vao, int vertex_count, Vec3 pos, Vec3 camera, Mat4 perspective, Mat4 *bone_offset_matrices, int transform_loc, int perspective_loc, int *bone_matrices_locations, float angle_x, float angle_y)
+void draw_object(int model_shader, int model_vao, int vertex_count, Vec3 pos, Vec3 camera, Mat4 perspective, Mat4 *bone_offset_matrices, int transform_loc, int perspective_loc, int *bone_matrices_locations, float model_angle_x, float model_angle_y, float camera_angle_x, float camera_angle_y, float animation_angle_x, float animation_angle_y, float animation_angle_z)
 {
     //so in this case I think we want to
     //rotate THEN translate?
@@ -158,26 +158,42 @@ void draw_object(int model_shader, int model_vao, int vertex_count, Vec3 pos, Ve
 
     
     //create rotation matrix and transpose it
-    Mat3 rotate_x = mat3_create_rotate_x(angle_x);
+    Mat3 model_rotate_x = mat3_create_rotate_x(model_angle_x);
 
-    Mat3 rotate_y = mat3_create_rotate_y(angle_y);
+    Mat3 model_rotate_y = mat3_create_rotate_y(model_angle_y);
+
+    //Mat3 animation_rotate_x = mat3_create_rotate_x(
+
+    Mat3 camera_rotate_x = mat3_create_rotate_x(camera_angle_x);
+    Mat3 camera_rotate_y = mat3_create_rotate_y(camera_angle_y);
+
+    Mat3 animation_rotate_x = mat3_create_rotate_x(animation_angle_x);
+    Mat3 animation_rotate_y = mat3_create_rotate_y(animation_angle_y);
 
     //multiply rotation by translation (i.e rotate then translate)
     //mat4_mult(rotate_x_transpose, tmp_translate_transpose, rotate_translate);
     //then multiply by perspective matrix
-    Mat3 rotate_x_y = mat3_mult(rotate_y, rotate_x);
+    Mat3 model_rotate_x_y = mat3_mult(model_rotate_y, model_rotate_x);
 
+    Mat3 animation_rotate_x_y = mat3_mult(animation_rotate_x, animation_rotate_y);
+
+    //THIS was acting weird
+    Mat4 camera_rotate = mat4_from_mat3(mat3_mult(camera_rotate_x, camera_rotate_y));
+
+    Mat4 animation_rotation = mat4_from_mat3(animation_rotate_x_y);
     //order?
     //
-    Mat4 model_rotation = mat4_from_mat3(rotate_x);
+    Mat4 model_rotation = mat4_from_mat3(model_rotate_x_y);
 
     Mat4 model_translation = mat4_create_translation(pos);
 
     Mat4 mrt = mat4_mult(model_translation, model_rotation);
     //Mat4 transformation = mat4_create_translation_rotation(rotate_x_y, camera);
 
-    
+    //ORDER matters here for an FPS, it's translate THEN rotate
+    //which means mult rotate*translate
     Mat4 camera_transformation = mat4_create_translation(camera);
+    camera_transformation = mat4_mult(camera_rotate, camera_transformation);
 
     Mat4 transformation = mat4_mult(camera_transformation, mrt);
     
@@ -191,10 +207,10 @@ void draw_object(int model_shader, int model_vao, int vertex_count, Vec3 pos, Ve
     
     Mat4 inverse_offset = mat4_inverse(bone_offset_matrices[bone_number]);
 
-    Mat4 animation_matrix = mat4_mult(mat4_mult(bone_offset_matrices[bone_number], model_rotation), inverse_offset);
+    Mat4 animation_matrix = mat4_mult(mat4_mult(bone_offset_matrices[bone_number], animation_rotation), inverse_offset);
     
     glUniformMatrix4fv(bone_matrices_locations[bone_number], 1, GL_FALSE, animation_matrix.elements);
-    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, camera_transformation.elements);
+    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, transformation.elements);
     glUniformMatrix4fv(perspective_loc, 1, GL_FALSE, perspective.elements);
 
     glBindVertexArray(model_vao);
@@ -634,7 +650,7 @@ int main(int argc, char **argv)
     }
 
     //OpenGL init stuff
-    //glEnable(GL_DEPTH_TEST);
+    glEnable(GL_DEPTH_TEST);
 
     
     boolean running = true;
@@ -844,9 +860,17 @@ int main(int argc, char **argv)
     
 
     //
-    float angle_x = 0.0f;
-    float angle_y = 0.0f;
-    float angle_z = 0.0f;
+    float model_angle_x = 0.0f;
+    float model_angle_y = 0.0f;
+    float model_model_angle_z = 0.0f;
+
+    float camera_angle_x = 0.0f;
+    float camera_angle_y = 0.0f;
+    float camera_angle_z = 0.0f;
+
+    float animation_angle_x = 0.0f;
+    float animation_angle_y = 0.0f;
+    float animation_angle_z = 0.0f;
 
 
     float resolution[2] = {(float)SCREENWIDTH, (float)SCREENHEIGHT};
@@ -900,6 +924,33 @@ int main(int argc, char **argv)
 	    camera.z -= dt;//does eventually disappear on horizon
 	}
 
+	//tgfh for MACK
+	if (keys[SDL_SCANCODE_T]) {
+	    camera_angle_x += 100*dt;
+	}
+	if (keys[SDL_SCANCODE_G]) {
+	    camera_angle_x -= 100*dt;
+	}
+	if (keys[SDL_SCANCODE_F]) {
+	    camera_angle_y += 100*dt;
+	}
+	if (keys[SDL_SCANCODE_H]) {
+	    camera_angle_y -= 100*dt;
+	}
+
+	if (keys[SDL_SCANCODE_I]) {
+	    animation_angle_x += 100*dt;
+	}
+	if (keys[SDL_SCANCODE_K]) {
+	    animation_angle_x -= 100*dt;
+	}
+	if (keys[SDL_SCANCODE_J]) {
+	    animation_angle_y += 100*dt;
+	}
+	if (keys[SDL_SCANCODE_L]) {
+	    animation_angle_y -= 100*dt;
+	}
+
 	if (keys[SDL_SCANCODE_W]) {
 
 	    triangle_pos.y -= dt;
@@ -918,20 +969,20 @@ int main(int argc, char **argv)
 	}
 
 	if (keys[SDL_SCANCODE_Q]) {
-	    angle_x += 100*dt;
+	    model_angle_x += 100*dt;
 	}
 	if (keys[SDL_SCANCODE_E]) {
-	    angle_x -= 100*dt;
+	    model_angle_x -= 100*dt;
 	}
 
 	if (keys[SDL_SCANCODE_Z]) {
-	    angle_y += 100*dt;
+	    model_angle_y += 100*dt;
 	}
 	if (keys[SDL_SCANCODE_X]) {
-	    angle_y -= 100*dt;
+	    model_angle_y -= 100*dt;
 	}
 
-	//printf("x rotation is: %f degrees \n", angle_x);
+	//printf("x rotation is: %f degrees \n", model_angle_x);
 	//printf("Camera x, y, z is : %f %f %f \n", camera.x, camera.y, camera.z);
 	//printf("triangle x, y, z is : %f %f %f \n", triangle_pos.x, triangle_pos.y, triangle_pos.z);
 	
@@ -965,29 +1016,31 @@ int main(int argc, char **argv)
 	glViewport(0, 0, SCREENWIDTH, SCREENHEIGHT);
 	glClearColor(0.01f, 0.01f, 0.15f, 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	//angle_x, sky_shader, sky_vao, sky_texture, transform_loc, time_ms_loc,
+	//model_angle_x, sky_shader, sky_vao, sky_texture, transform_loc, time_ms_loc,
 	//current_time_ms, perspective
 
 	
-	//draw_sky(angle_x, shader_program, test_vaos[0], test_texture, transform_loc, time_ms_location, current_time_ms, perspective);
+	//draw_sky(model_angle_x, shader_program, test_vaos[0], test_texture, transform_loc, time_ms_location, current_time_ms, perspective);
 	//glUseProgram(basic_shader_program);
 	//glUniformMatrix4fv(basic_transform_loc, 1, GL_FALSE, trans_rot_out);
 	//glBindVertexArray(model_vao);
 	//glDrawArrays(GL_TRIANGLES, 0, model_vertex_count);
 	
-	draw_object(basic_shader_program, model_vao, model_vertex_count, triangle_pos, camera, perspective, bone_offset_matrices, basic_transform_loc, basic_perspective_loc, bone_matrices_locations, angle_x, angle_y);
+	draw_object(basic_shader_program, model_vao, model_vertex_count, triangle_pos, camera, perspective, bone_offset_matrices, basic_transform_loc, basic_perspective_loc, bone_matrices_locations, model_angle_x, model_angle_y, camera_angle_x, camera_angle_y, animation_angle_x, animation_angle_y, animation_angle_z);
 
 
 	Vec3 emitter_pos = vec3_init(0.0f, 0.0f, 1.0f);
 	//draw_particles(particle_shader_program, particle_vao, PARTICLE_COUNT, current_time_ms, emitter_pos, camera, perspective, particle_transform_loc, particle_perspective_loc, particle_time_loc, particle_emitter_loc);
 
+	#if 0
 	int point_perspective_loc = glGetUniformLocation(point_shader_program, "perspective");
 	int point_transform_loc = glGetUniformLocation(point_shader_program, "transform");
+	
 	glUseProgram(point_shader_program);
 	glUniformMatrix4fv(point_perspective_loc, 1, GL_FALSE, perspective.elements);
 	//Mat4 transform = mat4_create_translation(camera);
-	Mat3 rotate_x = mat3_create_rotate_x(angle_x + 90.0f);
-	Mat3 rotate_y = mat3_create_rotate_y(angle_y);
+	Mat3 rotate_x = mat3_create_rotate_x(model_angle_x + 90.0f);
+	Mat3 rotate_y = mat3_create_rotate_y(model_angle_y);
 	Mat3 rotation = mat3_mult(rotate_x, rotate_y);
 	Mat4 transform = mat4_create_translation_rotation(rotation, camera);
 	glUniformMatrix4fv(point_transform_loc, 1, GL_FALSE, transform.elements);
@@ -997,6 +1050,7 @@ int main(int argc, char **argv)
 	glEnable(GL_PROGRAM_POINT_SIZE);
 	glDrawArrays(GL_POINTS, 0, bone_count);
 	glDisable(GL_PROGRAM_POINT_SIZE);
+	#endif
 	SDL_GL_SwapWindow(window);
     }
     
