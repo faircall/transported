@@ -62,6 +62,9 @@
 
 #define MAX_BONES 32 //enough?
 
+
+Mat4 g_local_animations[MAX_BONES];
+
 //todo: clean up shader boilerplate
 
 typedef unsigned int boolean;
@@ -112,7 +115,7 @@ boolean import_skeleton_node(struct aiNode *assimp_node, Skeleton_Node **skeleto
     for (int i = 0; i < MAX_BONES; i++) {
 	temp->children[i] = NULL;//init to zero
     }
-    boolean has_bones = false;
+    boolean has_bone = false;
     for (int i = 0; i < bone_count; i++) {
 	if (!strcmp(bone_names[i], temp->name)) {
 	    printf("node uses bone %i\n", i);
@@ -124,9 +127,32 @@ boolean import_skeleton_node(struct aiNode *assimp_node, Skeleton_Node **skeleto
 
     if (!has_bone) {
 	printf("No bone found\n");
+    } else {
+	printf("found a BONE, ey?\n");
     }
 
-    
+    boolean has_useful_child = false;
+
+    for (int i = 0; i < (int)assimp_node->mNumChildren; i++) {
+	if (import_skeleton_node(assimp_node->mChildren[i],
+				 &temp->children[temp->num_children],
+				 bone_count,
+				 bone_names)) {
+	    has_useful_child = true;
+	    temp->num_children++;
+	} else {
+	    printf("useless child culled\n");
+	}
+    }
+
+    if (has_useful_child || has_bone) {
+	*skeleton_node = temp;
+	return true;
+    }
+
+    free(temp);
+    temp = NULL; //why do this
+    return false;
 }
 
 Mat4 mat4_from_assimp_mat4(struct aiMatrix4x4 m)
@@ -155,6 +181,31 @@ Mat4 mat4_from_assimp_mat4(struct aiMatrix4x4 m)
     mat4(result, 3, 3) = m.d4;
 
     return result;
+}
+
+void skeleton_animate(Skeleton_Node *node, Mat4 parent_matrix, Mat4 *bone_offset_matrices,
+    Mat4 *bone_animation_matrices)
+{
+    //assert node here?
+
+    Mat4 our_matrix = mat4_create_identity();
+
+    Mat4 local_animation = mat4_create_identity();
+
+    int bone_index = node->bone_index;
+
+    if (bone_index > -1) {
+	Mat4 bone_offset = bone_offset_matrices[bone_index];
+	Mat4 inverse_bone_offset = mat4_inverse(bone_offset);
+	local_animation = g_local_animations[bone_index];
+	our_matrix = mat4_mult(parent_matrix, mat4_mult(inverse_bone_offset, mat4_mult(local_animation, bone_offset)));
+    } else {
+	our_matrix = parent_matrix;
+    }
+
+    for (int i = 0; i < node->num_children; i++) {
+	skeleton_animate(node->children[i], our_matrix, bone_offset_matrices, bone_animation_matrices);
+    }
 }
 
 void draw_sky(float angle_x, int sky_shader, int sky_vao, int sky_texture, int transform_loc, int time_ms_loc, float current_time_ms, Mat4 perspective)
@@ -743,7 +794,7 @@ int main(int argc, char **argv)
     Skeleton_Node *skeleton_root_node = NULL;
 
     // rudy_ply.ply
-    model_load_failure = load_model_file("art/rudy_rigged_better.fbx", "art/rudy_rigged_better.ply", &model_vao, &model_vertices, &model_normals, &model_colors, &bone_offset_matrices, &bone_ids, &model_vertex_count, &bone_count, &skeleton_root_node);
+    model_load_failure = load_model_file("art/rudy_rigged.fbx", "art/rudy_rigged.ply", &model_vao, &model_vertices, &model_normals, &model_colors, &bone_offset_matrices, &bone_ids, &model_vertex_count, &bone_count, &skeleton_root_node);
     if (model_load_failure) {
 	printf("Hold on a model didn't load\n");
 	return -1;
@@ -949,6 +1000,7 @@ int main(int argc, char **argv)
 
     
     
+    
     while (running) {
 	current_time = SDL_GetTicks();
 	float current_time_ms = current_time/1000.0f;
@@ -957,6 +1009,8 @@ int main(int argc, char **argv)
 	float dt = time_elapsed/1000.0f;//dt is inconsistent, should be noted
 
 	const Uint8* keys = SDL_GetKeyboardState(NULL);
+
+	boolean motion_occured = false;
 
 	if (keys[SDL_SCANCODE_UP]) {
 
@@ -998,15 +1052,19 @@ int main(int argc, char **argv)
 
 	if (keys[SDL_SCANCODE_I]) {
 	    animation_angle_x += 100*dt;
+	    motion_occured = true;
 	}
 	if (keys[SDL_SCANCODE_K]) {
 	    animation_angle_x -= 100*dt;
+	    motion_occured = true;
 	}
 	if (keys[SDL_SCANCODE_J]) {
 	    animation_angle_y += 100*dt;
+	    motion_occured = true;
 	}
 	if (keys[SDL_SCANCODE_L]) {
 	    animation_angle_y -= 100*dt;
+	    motion_occured = true;
 	}
 
 	if (keys[SDL_SCANCODE_W]) {
