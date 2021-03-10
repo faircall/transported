@@ -41,6 +41,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 #include <GL/glew.h>
 #include "SDL.h"
 #include "SDL_opengl.h"
@@ -85,6 +86,48 @@ typedef struct {
     float *colors;
     Mat4 *bone_offset_matrices;
 } Model_Info;
+
+typedef struct Skeleton_Node_t {
+    struct Skeleton_Node_t *children[MAX_BONES];
+    char name[64];
+    int num_children;
+    int bone_index;
+} Skeleton_Node;
+
+boolean import_skeleton_node(struct aiNode *assimp_node, Skeleton_Node **skeleton_node, int bone_count, char bone_names[][64])//this might be cpp nonsense
+{
+    //function will work like this:
+    //we give it the assimp root node (scene)
+    //a null-pointer to skeleton root node (allocate internally)
+    //and total bone count
+
+    Skeleton_Node *temp = (Skeleton_Node*)malloc(sizeof(Skeleton_Node));
+
+    strcpy(temp->name, assimp_node->mName.data);//this may fuck us up
+
+    printf("-node name = %s\n", temp->name);
+    temp->num_children = 0;
+    printf("node has %d children\n", (int)assimp_node->mNumChildren);
+    temp->bone_index = -1;
+    for (int i = 0; i < MAX_BONES; i++) {
+	temp->children[i] = NULL;//init to zero
+    }
+    boolean has_bones = false;
+    for (int i = 0; i < bone_count; i++) {
+	if (!strcmp(bone_names[i], temp->name)) {
+	    printf("node uses bone %i\n", i);
+	    temp->bone_index = i;
+	    has_bone = true;
+	    break;
+	}
+    }
+
+    if (!has_bone) {
+	printf("No bone found\n");
+    }
+
+    
+}
 
 Mat4 mat4_from_assimp_mat4(struct aiMatrix4x4 m)
 {
@@ -329,7 +372,7 @@ int load_shader_program(unsigned int *shader_program, char *vertex_filename, cha
     return 0;
 }
 
-int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **model_vertices, float **model_normals, float **model_colors, Mat4 **bone_offset_matrices, GLint **bone_ids, int *model_vertex_count, int *bone_count)
+int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **model_vertices, float **model_normals, float **model_colors, Mat4 **bone_offset_matrices, GLint **bone_ids, int *model_vertex_count, int *bone_count, Skeleton_Node **skeleton_root_node)
 {
     //VERY dumb workaround for colors:
     //pull the colors from the ply file
@@ -393,7 +436,10 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
     if (bones != 0) {
 	has_bones = true;
 	(*bone_ids) = (int*)malloc(sizeof(int) * vertices);//because each vertex has a bone id
-	
+	//max 256 bones
+	//max 64 chars in length
+	char bone_names[256][64];
+
 	
 	for (int i = 0; i < bones; i++) {
 	    //mName
@@ -404,6 +450,9 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
 	    //we want ids / names?
 	    //weights
 	    const struct aiBone *bone = mesh->mBones[i];
+
+	    strcpy(bone_names[i], bone->mName.data);
+	    printf("Bone names %i is %s\n", i, bone_names[i]); 
 
 	    (*bone_offset_matrices)[i] = mat4_from_assimp_mat4(bone->mOffsetMatrix);
 
@@ -421,6 +470,14 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
 	    }
 	    
 
+	}
+
+	//get the root node
+	struct aiNode *assimp_node = scene->mRootNode;
+
+	if (!import_skeleton_node(assimp_node, skeleton_root_node, bones, bone_names)) {
+	    //handle the error
+	    printf("Skeleton loading didn't work homie\n");
 	}
     }
     
@@ -683,9 +740,10 @@ int main(int argc, char **argv)
     GLint *bone_ids = NULL;
     GLuint model_vao;
     int model_load_failure;
+    Skeleton_Node *skeleton_root_node = NULL;
 
     // rudy_ply.ply
-    model_load_failure = load_model_file("art/rudy_rigged.fbx", "art/rudy_rigged.ply", &model_vao, &model_vertices, &model_normals, &model_colors, &bone_offset_matrices, &bone_ids, &model_vertex_count, &bone_count);
+    model_load_failure = load_model_file("art/rudy_rigged_better.fbx", "art/rudy_rigged_better.ply", &model_vao, &model_vertices, &model_normals, &model_colors, &bone_offset_matrices, &bone_ids, &model_vertex_count, &bone_count, &skeleton_root_node);
     if (model_load_failure) {
 	printf("Hold on a model didn't load\n");
 	return -1;
