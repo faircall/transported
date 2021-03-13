@@ -996,7 +996,10 @@ int main(int argc, char **argv)
 	sprintf(mat_name, "bone_matrices[%i]", i);//quite slick!
 	bone_matrices_locations[i] = glGetUniformLocation(basic_shader_program, mat_name);
 	glUniformMatrix4fv(bone_matrices_locations[i], 1, GL_FALSE, test_identity.elements);
+	g_local_animations[i] = mat4_create_identity();
     }
+
+
 
     
     
