@@ -36,6 +36,7 @@
 
 
 //NEXT: return to work on the animation system.
+//with the new bone animation mats
 
 
 #include <stdio.h>
@@ -788,6 +789,8 @@ int main(int argc, char **argv)
     float *model_normals = NULL;
     float *model_colors = NULL;
     Mat4 *bone_offset_matrices = NULL;
+    //this can be static
+    Mat4 bone_animation_matrices[MAX_BONES];
     GLint *bone_ids = NULL;
     GLuint model_vao;
     int model_load_failure;
@@ -997,6 +1000,7 @@ int main(int argc, char **argv)
 	bone_matrices_locations[i] = glGetUniformLocation(basic_shader_program, mat_name);
 	glUniformMatrix4fv(bone_matrices_locations[i], 1, GL_FALSE, test_identity.elements);
 	g_local_animations[i] = mat4_create_identity();
+	bone_animation_matrices[i] = mat4_create_identity();
     }
 
 
@@ -1010,7 +1014,7 @@ int main(int argc, char **argv)
 	time_elapsed = current_time - last_time;
 	last_time = current_time;	
 	float dt = time_elapsed/1000.0f;//dt is inconsistent, should be noted
-
+	total_time_ms += dt;
 	const Uint8* keys = SDL_GetKeyboardState(NULL);
 
 	boolean motion_occured = false;
@@ -1055,18 +1059,22 @@ int main(int argc, char **argv)
 
 	if (keys[SDL_SCANCODE_I]) {
 	    animation_angle_x += 100*dt;
+	    g_local_animations[0] = mat4_from_mat3(mat3_create_rotate_x(animation_angle_x));
 	    motion_occured = true;
 	}
 	if (keys[SDL_SCANCODE_K]) {
 	    animation_angle_x -= 100*dt;
+	    g_local_animations[0] = mat4_from_mat3(mat3_create_rotate_x(animation_angle_x));
 	    motion_occured = true;
 	}
 	if (keys[SDL_SCANCODE_J]) {
 	    animation_angle_y += 100*dt;
+	    g_local_animations[1] = mat4_from_mat3(mat3_create_rotate_y(animation_angle_y));
 	    motion_occured = true;
 	}
 	if (keys[SDL_SCANCODE_L]) {
 	    animation_angle_y -= 100*dt;
+	    g_local_animations[1] = mat4_from_mat3(mat3_create_rotate_y(animation_angle_y));
 	    motion_occured = true;
 	}
 
@@ -1101,23 +1109,9 @@ int main(int argc, char **argv)
 	    model_angle_y -= 100*dt;
 	}
 
-	//printf("x rotation is: %f degrees \n", model_angle_x);
-	//printf("Camera x, y, z is : %f %f %f \n", camera.x, camera.y, camera.z);
-	//printf("triangle x, y, z is : %f %f %f \n", triangle_pos.x, triangle_pos.y, triangle_pos.z);
-	
-
-
-
-
-	
-
-	
-	
-	
- 	
-
-	
-	total_time_ms += dt;
+	if (motion_occured) {
+	    skeleton_animate(skeleton_root_node, mat4_create_identity(), bone_offset_matrices, bone_animation_matrices);//TODO: create mat4 *bone_animation_matrices of size .. ? ..in main scope and init each with to mat4_identity
+	}
 	
 
 	float green_value = (sin(total_time_ms)/2.0f) + 0.5f;
@@ -1135,15 +1129,7 @@ int main(int argc, char **argv)
 	glViewport(0, 0, SCREENWIDTH, SCREENHEIGHT);
 	glClearColor(0.01f, 0.01f, 0.15f, 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	//model_angle_x, sky_shader, sky_vao, sky_texture, transform_loc, time_ms_loc,
-	//current_time_ms, perspective
-
 	
-	//draw_sky(model_angle_x, shader_program, test_vaos[0], test_texture, transform_loc, time_ms_location, current_time_ms, perspective);
-	//glUseProgram(basic_shader_program);
-	//glUniformMatrix4fv(basic_transform_loc, 1, GL_FALSE, trans_rot_out);
-	//glBindVertexArray(model_vao);
-	//glDrawArrays(GL_TRIANGLES, 0, model_vertex_count);
 	
 	draw_object(basic_shader_program, model_vao, model_vertex_count, triangle_pos, camera, perspective, bone_offset_matrices, basic_transform_loc, basic_perspective_loc, bone_matrices_locations, model_angle_x, model_angle_y, camera_angle_x, camera_angle_y, animation_angle_x, animation_angle_y, animation_angle_z);
 
@@ -1151,6 +1137,8 @@ int main(int argc, char **argv)
 	Vec3 emitter_pos = vec3_init(0.0f, 0.0f, 1.0f);
 	//draw_particles(particle_shader_program, particle_vao, PARTICLE_COUNT, current_time_ms, emitter_pos, camera, perspective, particle_transform_loc, particle_perspective_loc, particle_time_loc, particle_emitter_loc);
 
+
+	//used for debug purposes
 	#if 0
 	int point_perspective_loc = glGetUniformLocation(point_shader_program, "perspective");
 	int point_transform_loc = glGetUniformLocation(point_shader_program, "transform");
