@@ -28,7 +28,8 @@
 //todo: assimp for mesh/animation imports - semidone
 
 //todo: backface culling or discard or whatever
-
+//todo: check the animation system using an actual
+//confirmed good rigged test model, rather than the one i made
 
 
 
@@ -188,6 +189,10 @@ void skeleton_animate(Skeleton_Node *node, Mat4 parent_matrix, Mat4 *bone_offset
     Mat4 *bone_animation_matrices)
 {
     //assert node here?
+    if (node == NULL) {
+	//corrupting the stack which aint great
+	return;
+    }
 
     Mat4 our_matrix = mat4_create_identity();
 
@@ -195,13 +200,18 @@ void skeleton_animate(Skeleton_Node *node, Mat4 parent_matrix, Mat4 *bone_offset
 
     int bone_index = node->bone_index;
 
+    //where do we change bone animation matrices??
+    
     if (bone_index > -1) {
 	Mat4 bone_offset = bone_offset_matrices[bone_index];
 	Mat4 inverse_bone_offset = mat4_inverse(bone_offset);
 	local_animation = g_local_animations[bone_index];
 	our_matrix = mat4_mult(parent_matrix, mat4_mult(inverse_bone_offset, mat4_mult(local_animation, bone_offset)));
+	bone_animation_matrices[bone_index] = our_matrix;
     } else {
+	printf("animation did nothing to thsi node because bone index was %d\n", bone_index);
 	our_matrix = parent_matrix;
+	//bone_animation_matrices[bone_index] = our_matrix;
     }
 
     for (int i = 0; i < node->num_children; i++) {
@@ -240,7 +250,7 @@ void draw_sky(float angle_x, int sky_shader, int sky_vao, int sky_texture, int t
     
 }
 
-void draw_object(int model_shader, int model_vao, int vertex_count, Vec3 pos, Vec3 camera, Mat4 perspective, Mat4 *bone_offset_matrices, int transform_loc, int perspective_loc, int *bone_matrices_locations, float model_angle_x, float model_angle_y, float camera_angle_x, float camera_angle_y, float animation_angle_x, float animation_angle_y, float animation_angle_z)
+void draw_object(int model_shader, int model_vao, int vertex_count, Vec3 pos, Vec3 camera, Mat4 perspective, Mat4 *bone_animation_matrices, int transform_loc, int perspective_loc, int *bone_matrices_locations, float model_angle_x, float model_angle_y, float camera_angle_x, float camera_angle_y, float animation_angle_x, float animation_angle_y, float animation_angle_z)
 {
     //so in this case I think we want to
     //rotate THEN translate?
@@ -298,13 +308,19 @@ void draw_object(int model_shader, int model_vao, int vertex_count, Vec3 pos, Ve
 
     ///it'sss wooooorking
 
-    int bone_number = 3;
+    int bone_number = 1;
     
-    Mat4 inverse_offset = mat4_inverse(bone_offset_matrices[bone_number]);
+    //this rotated everything, which we don't want
 
-    Mat4 animation_matrix = mat4_mult(mat4_mult(bone_offset_matrices[bone_number], animation_rotation), inverse_offset);
-    
-    glUniformMatrix4fv(bone_matrices_locations[bone_number], 1, GL_FALSE, animation_matrix.elements);
+    Mat4 inverse_offset = mat4_inverse(bone_animation_matrices[bone_number]);
+
+    //Mat4 animation_matrix = mat4_mult(mat4_mult(bone_animation_matrices[bone_number], animation_rotation), inverse_offset);
+
+    for (int i = 0; i < MAX_BONES; i++) {
+	
+	glUniformMatrix4fv(bone_matrices_locations[i], 1, GL_FALSE, bone_animation_matrices[i].elements);
+    }
+
     glUniformMatrix4fv(transform_loc, 1, GL_FALSE, transformation.elements);
     glUniformMatrix4fv(perspective_loc, 1, GL_FALSE, perspective.elements);
 
@@ -1057,24 +1073,25 @@ int main(int argc, char **argv)
 	    camera_angle_y -= 100*dt;
 	}
 
+	int bone_to_animate = 1;
 	if (keys[SDL_SCANCODE_I]) {
 	    animation_angle_x += 100*dt;
-	    g_local_animations[0] = mat4_from_mat3(mat3_create_rotate_x(animation_angle_x));
+	    g_local_animations[bone_to_animate] = mat4_from_mat3(mat3_create_rotate_x(animation_angle_x));
 	    motion_occured = true;
 	}
 	if (keys[SDL_SCANCODE_K]) {
 	    animation_angle_x -= 100*dt;
-	    g_local_animations[0] = mat4_from_mat3(mat3_create_rotate_x(animation_angle_x));
+	    g_local_animations[bone_to_animate] = mat4_from_mat3(mat3_create_rotate_x(animation_angle_x));
 	    motion_occured = true;
 	}
 	if (keys[SDL_SCANCODE_J]) {
 	    animation_angle_y += 100*dt;
-	    g_local_animations[1] = mat4_from_mat3(mat3_create_rotate_y(animation_angle_y));
+	    g_local_animations[bone_to_animate] = mat4_from_mat3(mat3_create_rotate_y(animation_angle_y));
 	    motion_occured = true;
 	}
 	if (keys[SDL_SCANCODE_L]) {
 	    animation_angle_y -= 100*dt;
-	    g_local_animations[1] = mat4_from_mat3(mat3_create_rotate_y(animation_angle_y));
+	    g_local_animations[bone_to_animate] = mat4_from_mat3(mat3_create_rotate_y(animation_angle_y));
 	    motion_occured = true;
 	}
 
@@ -1131,7 +1148,7 @@ int main(int argc, char **argv)
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	
 	
-	draw_object(basic_shader_program, model_vao, model_vertex_count, triangle_pos, camera, perspective, bone_offset_matrices, basic_transform_loc, basic_perspective_loc, bone_matrices_locations, model_angle_x, model_angle_y, camera_angle_x, camera_angle_y, animation_angle_x, animation_angle_y, animation_angle_z);
+	draw_object(basic_shader_program, model_vao, model_vertex_count, triangle_pos, camera, perspective, bone_animation_matrices, basic_transform_loc, basic_perspective_loc, bone_matrices_locations, model_angle_x, model_angle_y, camera_angle_x, camera_angle_y, animation_angle_x, animation_angle_y, animation_angle_z);
 
 
 	Vec3 emitter_pos = vec3_init(0.0f, 0.0f, 1.0f);
