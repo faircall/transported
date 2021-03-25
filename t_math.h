@@ -28,6 +28,10 @@ typedef struct {
     float w;
 } Vec4;
 
+//they are the same struct but we want to be
+//specific 
+typedef Vec4 Quaternion;
+
 //I'm unsure if this is actually
 //getting around the issue of a bunch of
 //heap allocs
@@ -174,6 +178,17 @@ float tan_deg(float angle);
 float deg_to_rad(float angle);
 
 
+Quaternion quaternion_init(float x, float y, float z, float w);
+Quaternion quaternion_from_vector_scalar(Vec3 v, float s);
+Quaternion quaternion_add(Quaternion a, Quaternion b);
+Quaternion quaternion_scale(Quaternion q, float s);
+Vec3 vec3_from_quaternion(Quaternion q);
+float scalar_from_quaternion(Quaternion q);
+Quaternion quaternion_mult(Quaternion a, Quaternion b);
+Quaternion quaternion_conjugate(Quaternion q);
+Quaternion quaternion_inverse(Quaternion q);
+Quaternion quaternion_pure(Vec3 v);
+float quaternion_mag(Quaternion q);
 
 #endif
 

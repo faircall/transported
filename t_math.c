@@ -742,3 +742,116 @@ float tan_deg(float angle)
 {
     return tan(deg_to_rad(angle));
 }
+
+Quaternion quaternion_init(float x, float y, float z, float w)
+{
+    Quaternion result;
+    result.x = x;
+    result.y = y;
+    result.z = z;
+    result.w = w;
+    return result;
+}
+
+Quaternion quaternion_from_vector_scalar(Vec3 v, float s)
+{
+    Quaternion result;
+    result.x = v.x;
+    result.y = v.y;
+    result.z = v.z;
+    result.w = s;
+    return result;
+}
+
+Quaternion quaternion_add(Quaternion a, Quaternion b)
+{
+    Quaternion result;
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    result.z = a.z + b.z;
+    result.w = a.w + b.w;
+    return result;
+}
+
+Quaternion quaternion_scale(Quaternion q, float s)
+{
+    Quaternion result;
+    result.x = q.x*s;
+    result.y = q.y*s;
+    result.z = q.z*s;
+    result.w = q.w*s;
+    return result;
+}
+
+Vec3 vec3_from_quaternion(Quaternion q)
+{
+    Vec3 result;
+    result.x = q.x;
+    result.y = q.y;
+    result.z = q.z;
+    return result;
+}
+
+float scalar_from_quaternion(Quaternion q)
+{
+    return q.w;
+}
+
+Quaternion quaternion_mult(Quaternion a, Quaternion b)
+{
+    //use a nice formula here
+    //though it's a little slower probably
+    Quaternion result;
+    
+    Vec3 va = vec3_from_quaternion(a);
+    Vec3 vb = vec3_from_quaternion(b);
+    
+    Vec3 cross = vec3_cross(va,vb);
+    float dot = vec3_dot(va,vb);
+
+    Vec3 sv1 = vec3_scale(va,b.w);
+    Vec3 sv2 = vec3_scale(vb,a.w);
+
+    Vec3 q_vector = vec3_add(cross, vec3_add(sv1, sv2));
+    float q_scalar = a.w*b.w - dot;
+
+    result = quaternion_from_vector_scalar(q_vector, q_scalar);
+    
+    return result;
+}
+
+Quaternion quaternion_conjugate(Quaternion q)
+{
+    Vec3 q_vector = vec3_from_quaternion(q);
+    q_vector = vec3_scale(q_vector, -1.0f);
+    Quaternion result = quaternion_from_vector_scalar(q_vector, q.w);
+    return result;
+}
+
+Quaternion quaternion_inverse(Quaternion q)
+{
+    Quaternion q_conjugate = quaternion_conjugate(q);
+    float mag = quaternion_mag(q);
+    float inv_mag_squared = 1.0f/(mag*mag);
+    Quaternion result = quaternion_scale(q_conjugate, inv_mag_squared);
+    return result;
+    
+}
+
+Quaternion quaternion_pure(Vec3 v)
+{
+    Quaternion result;
+    result.x = v.x;
+    result.y = v.y;
+    result.z = v.z;
+    result.w = 0.0f;
+    return result;
+}
+
+float quaternion_mag(Quaternion q)
+{
+    Quaternion q_conjugate = quaternion_conjugate(q);
+    Quaternion product = quaternion_mult(q, q_conjugate);
+    float result = sqrt(product.w);
+    return result;
+}
