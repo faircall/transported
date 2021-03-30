@@ -94,6 +94,21 @@ typedef struct {
 
 typedef struct Skeleton_Node_t {
     struct Skeleton_Node_t *children[MAX_BONES];
+
+    Vec3 *position_keys;
+    //technically these are versors
+    Quaternion *rotation_keys;
+    Vec3 *scale_keys;
+    
+    double *position_key_times;
+    double *rotation_key_times;
+    double *scale_key_times;
+
+    int num_position_keys;
+    int num_rotation_keys;
+    int num_scale_keys;
+    
+    //existing data
     char name[64];
     int num_children;
     int bone_index;
@@ -194,7 +209,7 @@ void skeleton_animate(Skeleton_Node *node, Mat4 parent_matrix, Mat4 *bone_offset
 	return;
     }
 
-    Mat4 our_matrix = mat4_create_identity();
+    Mat4 our_matrix = parent_matrix;
 
     Mat4 local_animation = mat4_create_identity();
 
@@ -210,7 +225,7 @@ void skeleton_animate(Skeleton_Node *node, Mat4 parent_matrix, Mat4 *bone_offset
 	bone_animation_matrices[bone_index] = our_matrix;
     } else {
 	printf("animation did nothing to thsi node because bone index was %d\n", bone_index);
-	our_matrix = parent_matrix;
+	//our_matrix = parent_matrix;
 	//bone_animation_matrices[bone_index] = our_matrix;
     }
 
@@ -440,14 +455,14 @@ int load_shader_program(unsigned int *shader_program, char *vertex_filename, cha
     return 0;
 }
 
-int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **model_vertices, float **model_normals, float **model_colors, Mat4 **bone_offset_matrices, GLint **bone_ids, int *model_vertex_count, int *bone_count, Skeleton_Node **skeleton_root_node)
+int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **model_vertices, float **model_normals, float **model_colors, Mat4 **bone_offset_matrices, GLint **bone_ids, int *model_vertex_count, int *bone_count, Skeleton_Node **skeleton_root_node, double *animation_duration)
 {
     //VERY dumb workaround for colors:
     //pull the colors from the ply file
     //pull the vertices and normals from the
     //fbx file
 
-    //what about the bones??
+    //what about the bones?? also from the fbx file?
 
     //maybe faceplam question: why are these NULL pointers valid
     //when I assign them values via a de-reference?
@@ -475,11 +490,12 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
     //contains the bones
     const struct aiMesh *mesh = scene->mMeshes[0];//fbx one
     const struct aiMesh *ply_mesh = ply_scene->mMeshes[0];
-    
+    int animations = scene->mNumAnimations;
     printf("%d vertices in the mesh\n", mesh->mNumVertices);
     int vertices = mesh->mNumVertices;
     int faces = mesh->mNumFaces;
     int bones = mesh->mNumBones;
+    
     (*bone_count) = bones;
 
     boolean has_vertices = false;
@@ -499,7 +515,11 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
     (*bone_offset_matrices) = (Mat4*)malloc(sizeof(Mat4) * bones);
 
 
-    
+    if (animations > 0) {
+	struct aiAnimation *animation = scene->mAnimations[0];
+	*animation_duration = animation->mDuration;
+	/* we will get keys here */
+    }
 
     if (bones != 0) {
 	has_bones = true;
@@ -801,6 +821,7 @@ int main(int argc, char **argv)
 
     int model_vertex_count;
     int bone_count;
+    double animation_duration;
     float *model_vertices = NULL;
     float *model_normals = NULL;
     float *model_colors = NULL;
@@ -813,7 +834,7 @@ int main(int argc, char **argv)
     Skeleton_Node *skeleton_root_node = NULL;
 
     // rudy_ply.ply
-    model_load_failure = load_model_file("art/rudy_rigged.fbx", "art/rudy_rigged.ply", &model_vao, &model_vertices, &model_normals, &model_colors, &bone_offset_matrices, &bone_ids, &model_vertex_count, &bone_count, &skeleton_root_node);
+    model_load_failure = load_model_file("art/rudy_rigged_animation.fbx", "art/rudy_rigged.ply", &model_vao, &model_vertices, &model_normals, &model_colors, &bone_offset_matrices, &bone_ids, &model_vertex_count, &bone_count, &skeleton_root_node, &animation_duration);
     if (model_load_failure) {
 	printf("Hold on a model didn't load\n");
 	return -1;
@@ -1000,6 +1021,7 @@ int main(int argc, char **argv)
     float animation_angle_y = 0.0f;
     float animation_angle_z = 0.0f;
 
+    double animation_timer = 0.0;
 
     float resolution[2] = {(float)SCREENWIDTH, (float)SCREENHEIGHT};
     glUniform2f(res_location, resolution[0], resolution[1]);
@@ -1034,6 +1056,12 @@ int main(int argc, char **argv)
 	const Uint8* keys = SDL_GetKeyboardState(NULL);
 
 	boolean motion_occured = false;
+
+	//temporary semi-global animation timing
+	animation_timer += dt;
+	if (animation_timer > animation_duration) {
+	    animation_timer -= animatation_duration;
+	}
 
 	if (keys[SDL_SCANCODE_UP]) {
 
@@ -1073,7 +1101,7 @@ int main(int argc, char **argv)
 	    camera_angle_y -= 100*dt;
 	}
 
-	int bone_to_animate = 1;
+	int bone_to_animate = 3;
 	if (keys[SDL_SCANCODE_I]) {
 	    animation_angle_x += 100*dt;
 	    g_local_animations[bone_to_animate] = mat4_from_mat3(mat3_create_rotate_x(animation_angle_x));
