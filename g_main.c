@@ -8,7 +8,7 @@
 //todo:mouselook
 //(eventually via quaternions??)
 
-//todo: quaternion rotation
+
 //todo: geometric algebra support (rotors bivectors etc)
 
 //todo: openAL for sound
@@ -25,11 +25,7 @@
 
 //wrap some of the drawing code -semidone
 
-//todo: assimp for mesh/animation imports - semidone
-
 //todo: backface culling or discard or whatever
-//todo: check the animation system using an actual
-//confirmed good rigged test model, rather than the one i made
 
 
 
@@ -37,9 +33,12 @@
 
 
 //NEXT: return to work on the animation system.
-//with the new bone animation mats
+//getting close
+//theres one issues
+//and I can't get blender to export the Rudy animation probably (this is a Blender knowledge issue)
+//also my lerping / slerping is not quite right
 
-
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -65,7 +64,7 @@
 #define MAX_BONES 32 //enough?
 
 
-Mat4 g_local_animations[MAX_BONES];
+
 
 //todo: clean up shader boilerplate
 
@@ -96,13 +95,12 @@ typedef struct Skeleton_Node_t {
     struct Skeleton_Node_t *children[MAX_BONES];
 
     Vec3 *position_keys;
-    //technically these are versors
-    Quaternion *rotation_keys;
+    Quaternion *rotation_keys;    //technically these are versors
     Vec3 *scale_keys;
     
-    double *position_key_times;
-    double *rotation_key_times;
-    double *scale_key_times;
+    float *position_key_times;
+    float *rotation_key_times;
+    float *scale_key_times;
 
     int num_position_keys;
     int num_rotation_keys;
@@ -127,6 +125,20 @@ boolean import_skeleton_node(struct aiNode *assimp_node, Skeleton_Node **skeleto
 
     printf("-node name = %s\n", temp->name);
     temp->num_children = 0;
+    //bunch of other stuff to init
+    temp->position_keys = NULL;
+    temp->rotation_keys = NULL;
+    temp->scale_keys = NULL;
+
+    temp->position_key_times = NULL;
+    temp->rotation_key_times = NULL;
+    temp->scale_key_times = NULL;
+
+    temp->num_position_keys = 0;
+    temp->num_rotation_keys = 0;
+    temp->num_scale_keys = 0;
+    
+    
     printf("node has %d children\n", (int)assimp_node->mNumChildren);
     temp->bone_index = -1;
     for (int i = 0; i < MAX_BONES; i++) {
@@ -134,7 +146,7 @@ boolean import_skeleton_node(struct aiNode *assimp_node, Skeleton_Node **skeleto
     }
     boolean has_bone = false;
     for (int i = 0; i < bone_count; i++) {
-	if (!strcmp(bone_names[i], temp->name)) {
+	if (strcmp(bone_names[i], temp->name) == 0) {
 	    printf("node uses bone %i\n", i);
 	    temp->bone_index = i;
 	    has_bone = true;
@@ -177,6 +189,8 @@ Mat4 mat4_from_assimp_mat4(struct aiMatrix4x4 m)
     Mat4 result;
     //meta-programming would make this way less painful
     //column major?
+
+    //THIS MATRIX MAY HAVE ROTATION DATA THAT WE DON'T WANT
     mat4(result, 0, 0) = m.a1;
     mat4(result, 0, 1) = m.b1;
     mat4(result, 0, 2) = m.c1;
@@ -200,37 +214,181 @@ Mat4 mat4_from_assimp_mat4(struct aiMatrix4x4 m)
     return result;
 }
 
-void skeleton_animate(Skeleton_Node *node, Mat4 parent_matrix, Mat4 *bone_offset_matrices,
+Mat4 mat4_trans_from_assimp_mat4(struct aiMatrix4x4 m)
+{
+    Mat4 result;
+    //meta-programming would make this way less painful
+    //column major?
+
+    //THIS MATRIX MAY HAVE ROTATION DATA THAT WE DON'T WANT
+    mat4(result, 0, 0) = 1.0f;
+    mat4(result, 0, 1) = 0.0f;
+    mat4(result, 0, 2) = 0.0f;
+    mat4(result, 0, 3) = 0.0f;
+
+    mat4(result, 1, 0) = 0.0f;
+    mat4(result, 1, 1) = 1.0f;
+    mat4(result, 1, 2) = 0.0f;
+    mat4(result, 1, 3) = 0.0f;
+
+    mat4(result, 2, 0) = 0.0f;
+    mat4(result, 2, 1) = 0.0f;
+    mat4(result, 2, 2) = 1.0f;
+    mat4(result, 2, 3) = 0.0f;
+
+    mat4(result, 3, 0) = m.a4;
+    mat4(result, 3, 1) = m.b4;
+    mat4(result, 3, 2) = m.c4;
+    mat4(result, 3, 3) = m.d4;
+
+    return result;
+}
+
+Skeleton_Node *find_node_in_skeleton(Skeleton_Node *root, const char *node_name)
+{
+    //this should be an assert
+    assert(root);
+
+    if (strcmp(node_name, root->name) == 0) {
+	printf("found the root\n");
+	return root;
+    }
+
+    //recurse to children
+    for (int i = 0; i < root->num_children; i++) {
+	Skeleton_Node *child = find_node_in_skeleton(root->children[i], node_name);
+	if (child != NULL) {
+	    printf("found a child\n");
+	    return child;
+	}
+    }
+    return NULL;
+}
+    
+
+void skeleton_animate(Skeleton_Node *node, float animation_time, Mat4 parent_matrix, Mat4 *bone_offset_matrices,
     Mat4 *bone_animation_matrices)
 {
-    //assert node here?
-    if (node == NULL) {
-	//corrupting the stack which aint great
-	return;
-    }
+    //I *think* maybe
+    //the issue is with the timers
+    assert(node);
 
     Mat4 our_matrix = parent_matrix;
 
     Mat4 local_animation = mat4_create_identity();
 
+    Mat4 node_translation = mat4_create_identity();
+    Mat4 node_rotation = mat4_create_identity();
+    Mat4 node_scale = mat4_create_identity();
+    if (node->num_position_keys > 0) {
+	int prev_key = 0;
+	int next_key = 0;
+	//careful of the off-by-one trap
+	for (int i = 0; i < node->num_position_keys - 1; i++) {
+	    prev_key = i;
+	    next_key = i + 1;
+	    if (node->position_key_times[next_key] >= animation_time) {
+		//printf("doing no translation\n");
+		break;
+	    }
+	}
+	float total_time = node->position_key_times[next_key] - node->position_key_times[prev_key];
+	float frame_time = (animation_time - node->position_key_times[prev_key]) / total_time;
+	if (frame_time > 1.0f || frame_time < 0.0f) {
+	    printf("we have %f translation t\n", frame_time);
+	}
+	//translation
+	Vec3 v_initial = node->position_keys[prev_key];
+	Vec3 v_final = node->position_keys[next_key];
+	Vec3 v_lerp = vec3_add(vec3_scale(v_initial, 1.0f - frame_time), vec3_scale(v_final,frame_time));
+	//I shouldn't assume this is all working properly...
+	//maybe check this
+	node_translation = mat4_create_translation(v_lerp);
+	//node_translation = mat4_transpose(node_translation);
+	//node_translation = mat4_create_identity();
+
+	
+	
+    }
+    if (node->num_rotation_keys > 0) {
+	int prev_key = 0;
+	int next_key = 0;
+	for (int i = 0; i < node->num_rotation_keys - 1; i++) {
+	    prev_key = i;
+	    next_key = i + 1;
+	    if (node->rotation_key_times[next_key] >= animation_time) {
+		printf("no rotation because animation time was %f and next key time was %f\n", animation_time, node->rotation_key_times[next_key]);
+		break;
+
+	    }
+	}
+	printf("doing rotating\n");
+	float total_time = node->rotation_key_times[next_key] - node->rotation_key_times[prev_key];
+	float frame_time = (animation_time - node->rotation_key_times[prev_key]) / total_time;
+	Quaternion q_initial = node->rotation_keys[prev_key];
+	//float check_init_mag = quaternion_mag(q_initial);
+	Quaternion q_final = node->rotation_keys[next_key];
+	//float check_final_mag = quaternion_mag(q_final);
+	if (frame_time < 0.0f) {
+	    printf("we have %f translation t\n", frame_time);
+	}
+	Quaternion q_lerp = quaternion_slerp(q_initial, q_final, frame_time);
+	node_rotation = mat4_from_quaternion(q_lerp);
+	//node_rotation = mat4_transpose(node_rotation);
+	//node_rotation = mat4_create_identity();
+    }
+
+
+    if (node->num_scale_keys > 0) {
+	int prev_key = 0;
+	int next_key = 0;
+	//careful of the off-by-one trap
+	for (int i = 0; i < node->num_scale_keys - 1; i++) {
+	    prev_key = i;
+	    next_key = i + 1;
+	    if (node->scale_key_times[next_key] >= animation_time) {
+		break;
+	    }
+	}
+	float total_time = node->scale_key_times[next_key] - node->scale_key_times[prev_key];
+	float frame_time = (animation_time - node->scale_key_times[prev_key]) / total_time;
+	//translation
+	Vec3 v_initial = node->scale_keys[prev_key];
+	Vec3 v_final = node->scale_keys[next_key];
+	Vec3 v_lerp = vec3_add(vec3_scale(v_initial, 1.0f - frame_time), vec3_scale(v_final,frame_time));
+	//I shouldn't assume this is all working properly...
+	//maybe check this
+	node_scale = mat4_create_scale_from_vec(v_lerp);
+	//node_translation = mat4_transpose(node_translation);
+	//node_translation = mat4_create_identity();
+	
+    }
+
+    //later add scaling here?
+
+    node_scale = mat4_create_identity();
+    local_animation = mat4_mult(node_scale, mat4_mult(node_translation, node_rotation));
+    
     int bone_index = node->bone_index;
 
     //where do we change bone animation matrices??
     
     if (bone_index > -1) {
 	Mat4 bone_offset = bone_offset_matrices[bone_index];
-	Mat4 inverse_bone_offset = mat4_inverse(bone_offset);
-	local_animation = g_local_animations[bone_index];
-	our_matrix = mat4_mult(parent_matrix, mat4_mult(inverse_bone_offset, mat4_mult(local_animation, bone_offset)));
-	bone_animation_matrices[bone_index] = our_matrix;
+	bone_offset = mat4_transpose(bone_offset);
+	//Mat4 bone_offset = mat4_create_identity();
+	Mat4 inv_bone_offset = mat4_inverse(bone_offset);
+	our_matrix = mat4_mult(parent_matrix, local_animation);
+	Mat4 matrix_to_add = mat4_mult(mat4_mult(parent_matrix, local_animation), mat4_mult(bone_offset, mat4_create_identity()));
+	bone_animation_matrices[bone_index] = matrix_to_add;
     } else {
-	printf("animation did nothing to thsi node because bone index was %d\n", bone_index);
+	//printf("animation did nothing to thsi node because bone index was %d\n", bone_index);
 	//our_matrix = parent_matrix;
 	//bone_animation_matrices[bone_index] = our_matrix;
     }
 
     for (int i = 0; i < node->num_children; i++) {
-	skeleton_animate(node->children[i], our_matrix, bone_offset_matrices, bone_animation_matrices);
+	skeleton_animate(node->children[i], animation_time, our_matrix, bone_offset_matrices, bone_animation_matrices);
     }
 }
 
@@ -330,12 +488,16 @@ void draw_object(int model_shader, int model_vao, int vertex_count, Vec3 pos, Ve
     Mat4 inverse_offset = mat4_inverse(bone_animation_matrices[bone_number]);
 
     //Mat4 animation_matrix = mat4_mult(mat4_mult(bone_animation_matrices[bone_number], animation_rotation), inverse_offset);
+    #if 0
+    glUniformMatrix4fv(bone_matrices_locations[3], 1, GL_FALSE, bone_animation_matrices[3].elements);
+#endif
 
+	#if 1
     for (int i = 0; i < MAX_BONES; i++) {
 	
 	glUniformMatrix4fv(bone_matrices_locations[i], 1, GL_FALSE, bone_animation_matrices[i].elements);
     }
-
+#endif
     glUniformMatrix4fv(transform_loc, 1, GL_FALSE, transformation.elements);
     glUniformMatrix4fv(perspective_loc, 1, GL_FALSE, perspective.elements);
 
@@ -514,12 +676,12 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
     (*model_colors) = (float*)malloc(sizeof(float) * vertices * 3);
     (*bone_offset_matrices) = (Mat4*)malloc(sizeof(Mat4) * bones);
 
-
-    if (animations > 0) {
-	struct aiAnimation *animation = scene->mAnimations[0];
-	*animation_duration = animation->mDuration;
-	/* we will get keys here */
+    for (int i = 0; i < bones; i++) {
+	(*bone_offset_matrices)[i] = mat4_create_identity();
     }
+
+
+
 
     if (bones != 0) {
 	has_bones = true;
@@ -542,7 +704,7 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
 	    strcpy(bone_names[i], bone->mName.data);
 	    printf("Bone names %i is %s\n", i, bone_names[i]); 
 
-	    (*bone_offset_matrices)[i] = mat4_from_assimp_mat4(bone->mOffsetMatrix);
+	    (*bone_offset_matrices)[i] = mat4_trans_from_assimp_mat4(bone->mOffsetMatrix);
 
 	    //get weights here later
 
@@ -559,7 +721,6 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
 	    
 
 	}
-
 	//get the root node
 	struct aiNode *assimp_node = scene->mRootNode;
 
@@ -567,6 +728,62 @@ int load_model_file(char *file_name, char *ply_file_name, GLuint *vao, float **m
 	    //handle the error
 	    printf("Skeleton loading didn't work homie\n");
 	}
+
+    }
+
+
+
+    if (animations > 0) {
+	struct aiAnimation *animation = scene->mAnimations[0];
+	*animation_duration = animation->mDuration;
+	/* we will get keys here */
+	for (int i = 0; i < (int)animation->mNumChannels; i++) {
+	    struct aiNodeAnim *channel = animation->mChannels[i];
+	    Skeleton_Node *node = find_node_in_skeleton(*skeleton_root_node, channel->mNodeName.data);
+	    assert(node);
+
+	    //mallocs
+	    node->num_position_keys = channel->mNumPositionKeys;
+	    node->num_rotation_keys = channel->mNumRotationKeys;
+	    node->num_scale_keys = channel->mNumScalingKeys;
+
+	    node->position_key_times = (float*)malloc(sizeof(float) * node->num_position_keys);
+	    node->rotation_key_times = (float*)malloc(sizeof(float) * node->num_rotation_keys);
+	    node->scale_key_times = (float*)malloc(sizeof(float) * node->num_scale_keys);
+
+	    node->position_keys = (Vec3*)malloc(sizeof(Vec3) * node->num_position_keys);
+	    node->rotation_keys = (Quaternion*)malloc(sizeof(Quaternion) * node->num_rotation_keys);
+	    node->scale_keys = (Vec3*)malloc(sizeof(Vec3) * node->num_scale_keys);
+
+	    //add position keys
+	    for (int j = 0; j < node->num_position_keys; j++) {
+		struct aiVectorKey key = channel->mPositionKeys[j];
+		node->position_keys[j].x = key.mValue.x;
+		node->position_keys[j].y = key.mValue.y;
+		node->position_keys[j].z = key.mValue.z;
+		node->position_key_times[j] = key.mTime;
+	    }
+	    //add rotation keys
+	    for (int j = 0; j < node->num_rotation_keys; j++) {
+		struct aiQuatKey key = channel->mRotationKeys[j];
+		node->rotation_keys[j].w = key.mValue.w;
+		node->rotation_keys[j].x = key.mValue.x;
+		node->rotation_keys[j].y = key.mValue.y;
+		node->rotation_keys[j].z = key.mValue.z;
+		node->rotation_key_times[j] = key.mTime;
+	    }
+	    for (int j = 0; j < node->num_scale_keys; j++) {
+		struct aiVectorKey key = channel->mScalingKeys[j];
+		node->scale_keys[j].x = key.mValue.x;
+		node->scale_keys[j].y = key.mValue.y;
+		node->scale_keys[j].z = key.mValue.z;
+		node->scale_key_times[j] = key.mTime;
+		
+	    }
+	}
+
+	
+	
     }
     
     if (mesh->mVertices != NULL) {
@@ -834,7 +1051,7 @@ int main(int argc, char **argv)
     Skeleton_Node *skeleton_root_node = NULL;
 
     // rudy_ply.ply
-    model_load_failure = load_model_file("art/rudy_rigged_animation.fbx", "art/rudy_rigged.ply", &model_vao, &model_vertices, &model_normals, &model_colors, &bone_offset_matrices, &bone_ids, &model_vertex_count, &bone_count, &skeleton_root_node, &animation_duration);
+    model_load_failure = load_model_file("art/monkey_with_anim_y_up.dae", "art/rudy_rigged_simple.ply", &model_vao, &model_vertices, &model_normals, &model_colors, &bone_offset_matrices, &bone_ids, &model_vertex_count, &bone_count, &skeleton_root_node, &animation_duration);
     if (model_load_failure) {
 	printf("Hold on a model didn't load\n");
 	return -1;
@@ -984,7 +1201,7 @@ int main(int argc, char **argv)
     
     stbi_image_free(imdata);
 
-    SDL_GL_SetSwapInterval(0);//using vsync seems to be kinda shitty?
+    //SDL_GL_SetSwapInterval(0);//using vsync seems to be kinda shitty?
 
    
 
@@ -1021,7 +1238,7 @@ int main(int argc, char **argv)
     float animation_angle_y = 0.0f;
     float animation_angle_z = 0.0f;
 
-    double animation_timer = 0.0;
+    float animation_timer = 0.0;
 
     float resolution[2] = {(float)SCREENWIDTH, (float)SCREENHEIGHT};
     glUniform2f(res_location, resolution[0], resolution[1]);
@@ -1037,7 +1254,7 @@ int main(int argc, char **argv)
 	sprintf(mat_name, "bone_matrices[%i]", i);//quite slick!
 	bone_matrices_locations[i] = glGetUniformLocation(basic_shader_program, mat_name);
 	glUniformMatrix4fv(bone_matrices_locations[i], 1, GL_FALSE, test_identity.elements);
-	g_local_animations[i] = mat4_create_identity();
+	
 	bone_animation_matrices[i] = mat4_create_identity();
     }
 
@@ -1055,12 +1272,16 @@ int main(int argc, char **argv)
 	total_time_ms += dt;
 	const Uint8* keys = SDL_GetKeyboardState(NULL);
 
-	boolean motion_occured = false;
+	
 
 	//temporary semi-global animation timing
-	animation_timer += dt;
+	animation_timer += (dt*0.25);
 	if (animation_timer > animation_duration) {
-	    animation_timer -= animatation_duration;
+	    //why this and not reset to zero?
+
+	    //animation_timer = animation_duration - animation_timer;
+	    animation_timer = 0.0f;
+	    //printf("resetting to a value of %f\n", animation_timer);
 	}
 
 	if (keys[SDL_SCANCODE_UP]) {
@@ -1102,26 +1323,7 @@ int main(int argc, char **argv)
 	}
 
 	int bone_to_animate = 3;
-	if (keys[SDL_SCANCODE_I]) {
-	    animation_angle_x += 100*dt;
-	    g_local_animations[bone_to_animate] = mat4_from_mat3(mat3_create_rotate_x(animation_angle_x));
-	    motion_occured = true;
-	}
-	if (keys[SDL_SCANCODE_K]) {
-	    animation_angle_x -= 100*dt;
-	    g_local_animations[bone_to_animate] = mat4_from_mat3(mat3_create_rotate_x(animation_angle_x));
-	    motion_occured = true;
-	}
-	if (keys[SDL_SCANCODE_J]) {
-	    animation_angle_y += 100*dt;
-	    g_local_animations[bone_to_animate] = mat4_from_mat3(mat3_create_rotate_y(animation_angle_y));
-	    motion_occured = true;
-	}
-	if (keys[SDL_SCANCODE_L]) {
-	    animation_angle_y -= 100*dt;
-	    g_local_animations[bone_to_animate] = mat4_from_mat3(mat3_create_rotate_y(animation_angle_y));
-	    motion_occured = true;
-	}
+
 
 	if (keys[SDL_SCANCODE_W]) {
 
@@ -1154,9 +1356,9 @@ int main(int argc, char **argv)
 	    model_angle_y -= 100*dt;
 	}
 
-	if (motion_occured) {
-	    skeleton_animate(skeleton_root_node, mat4_create_identity(), bone_offset_matrices, bone_animation_matrices);//TODO: create mat4 *bone_animation_matrices of size .. ? ..in main scope and init each with to mat4_identity
-	}
+	
+	skeleton_animate(skeleton_root_node, animation_timer, mat4_create_identity(), bone_offset_matrices, bone_animation_matrices);//TODO: create mat4 *bone_animation_matrices of size .. ? ..in main scope and init each with to mat4_identity
+	
 	
 
 	float green_value = (sin(total_time_ms)/2.0f) + 0.5f;

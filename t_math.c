@@ -434,6 +434,13 @@ Mat4 mat4_create_translation_rotation(Mat3 rotation, Vec3 t)
     return result;
 }
 
+Mat4 mat4_create_rotation(Mat3 rotation)
+{
+    Vec3 t = vec3_init(0.0f, 0.0f, 0.0f);
+    Mat4 result = mat4_create_translation_rotation(rotation, t);
+    return result;
+}
+
 Mat4 mat4_create_perspective(float fovy, float aspect, float near, float far)
 {
     //s is aspect_ratio
@@ -488,6 +495,17 @@ Vec3 vec3_from_mat4(Mat4 a, int col)
     result.x = mat4(a, 0, col);
     result.y = mat4(a, 1, col);
     result.z = mat4(a, 2, col);
+    return result;
+}
+
+Mat4 mat4_transpose(Mat4 a)
+{
+    Mat4 result;
+    for (int i = 0; i < 4; i++) {
+	for (int j = 0; j < 4; j++) {
+	    mat4(result, i, j) = mat4(a, j, i);
+	}
+    }
     return result;
 }
 
@@ -847,6 +865,121 @@ Quaternion quaternion_pure(Vec3 v)
     result.w = 0.0f;
     return result;
 }
+
+
+   
+
+Quaternion quaternion_lerp(Quaternion q1, Quaternion q2, float t)
+{
+    //this may be a terribad idea
+    Quaternion result;
+    result.x = q1.x + t*(q2.x - q1.x);
+    result.y = q1.y + t*(q2.y - q1.y);
+    result.z = q1.z + t*(q2.z - q1.z);
+    result.w = q1.w + t*(q2.w - q1.w);
+    return result;    
+}
+
+
+float quaternion_dot(Quaternion q1, Quaternion q2)
+{
+    float result;
+    result = q1.x*q2.x + q1.y*q2.y + q1.z*q2.z + q1.w*q2.w;
+    return result;
+}
+
+Quaternion quaternion_slerp(Quaternion q1, Quaternion q2, float t)
+{
+    float cos_half_theta = quaternion_dot(q1, q2);
+    //printf("cos half theta is %f\n", cos_half_theta);
+    if (cos_half_theta < 0.0f) {
+	//printf("did a negation\n");
+	q1 = quaternion_scale(q1, -1.0f);
+	cos_half_theta = quaternion_dot(q1, q2);
+    }
+    if (fabs(cos_half_theta) > 1.0f) {
+	//printf("returned q1\n");
+	return q1;
+    }
+    
+    float sin_half_theta = sqrt(1.0f - cos_half_theta*cos_half_theta);
+    
+    Quaternion result;
+
+    if (fabs(sin_half_theta) < 0.001f) {
+	result = quaternion_add(quaternion_scale(q1, 1.0f - t), quaternion_scale(q2, t));
+	return result;
+    }
+    float half_theta = acos(cos_half_theta);
+    float a = sin((1.0f - t) * half_theta) / sin_half_theta;
+    float b = sin(t * half_theta) / sin_half_theta;
+    result = quaternion_add(quaternion_scale(q1, a), quaternion_scale(q2, b));
+    return result;    
+}
+
+Mat3 mat3_from_quaternion(Quaternion q)
+{
+    float x2 = q.x * q.x;
+    float y2 = q.y * q.y;
+    float z2 = q.z * q.z;
+
+    float xy = q.x * q.y;
+    float xz = q.x * q.z;
+    float yz = q.y * q.z;
+    float wx = q.w * q.x;
+    float wy = q.w * q.y;
+    float wz = q.w * q.z;
+
+    float a00 = 1.0f - 2.0f * (y2 + z2);
+    float a01 = 2.0f * (xy - wz);
+    float a02 = 2.0f * (xz + wy);
+
+    float a10 = 2.0f * (xy + wz);
+    float a11 = 1.0f - 2.0f * (x2 + z2);
+    float a12 = 2.0f * (yz - wx);
+
+    float a20 = 2.0f * (xz - wy);
+    float a21 = 2.0f * (yz + wx);
+    float a22 = 1.0f - 2.0f * (x2 + y2);
+
+    //this may not be ... correct
+
+    Mat3 result = mat3_init_float(a00, a01, a02,
+				  a10, a11, a12,
+				  a20, a21, a22);
+    return result;
+}
+
+Mat4 mat4_from_quaternion(Quaternion q)
+{
+    Mat4 result;
+    Mat3 rotation = mat3_from_quaternion(q);
+    result = mat4_create_rotation(rotation);
+    return result;
+}
+
+Mat4 mat4_create_scale_from_float(float s)
+{
+    Mat4 result = mat4_create_identity();
+    mat4(result,0,0) = s;
+    mat4(result,1,1) = s;
+    mat4(result,2,2) = s;
+    //mat4(result,0,0) = s;
+    return result;
+	
+}
+
+Mat4 mat4_create_scale_from_vec(Vec3 v)
+{
+    Mat4 result = mat4_create_identity();
+    mat4(result,0,0) = v.x;
+    mat4(result,1,1) = v.y;
+    mat4(result,2,2) = v.z;
+    //mat4(result,0,0) = s;
+    return result;
+	
+}
+   
 
 float quaternion_mag(Quaternion q)
 {

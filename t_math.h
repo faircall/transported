@@ -169,6 +169,8 @@ Mat4 mat4_create_translation(Vec3 t);
 
 Mat4 mat4_create_translation_rotation(Mat3 rotation, Vec3 t);
 
+Mat4 mat4_create_rotation(Mat3 rotation);
+
 Mat4 mat4_create_perspective(float fovy, float s, float n, float f);
 
 float cos_deg(float angle);
@@ -188,6 +190,14 @@ Quaternion quaternion_mult(Quaternion a, Quaternion b);
 Quaternion quaternion_conjugate(Quaternion q);
 Quaternion quaternion_inverse(Quaternion q);
 Quaternion quaternion_pure(Vec3 v);
+Quaternion quaternion_slerp(Quaternion q1, Quaternion q2, float t);
+Quaternion quaternion_lerp(Quaternion q1, Quaternion q2, float t);
+Mat3 mat3_from_quaternion(Quaternion q);
+Mat4 mat4_from_quaternion(Quaternion q);
+Mat4 mat4_transpose(Mat4 a);
+Mat4 mat4_create_scale_from_float(float s);
+Mat4 mat4_create_scale_from_vec(Vec3 v);
+
 float quaternion_mag(Quaternion q);
 
 #endif
