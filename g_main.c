@@ -3,17 +3,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-
-
-//todo:mouselook
-//(eventually via quaternions??)
-
-
 //todo: geometric algebra support (rotors bivectors etc)
 
 //todo: openAL for sound
-//todo: editor (a level is just vertices and shit right?)
-
 
 //todo: clouds. start with a texture and change it some ways?
 //or use noise to make the clouds?
@@ -32,11 +24,21 @@
 
 
 
-//NEXT: return to work on the animation system.
+//TODO: animation system...
 //getting close
 //theres one issues
-//and I can't get blender to export the Rudy animation probably (this is a Blender knowledge issue)
-//also my lerping / slerping is not quite right
+//I can't get blender to export the Rudy animation probably (this is a Blender knowledge issue)
+//I may have to re-rig it or something, since I winged it first time through
+
+//PRIORITY
+//todo:mouselook
+//ok got this working with basic angle and rotations,
+//will shift later to quaternions I think
+//todo: editor (a level is just vertices and shit right?)
+//(eventually via quaternions??)
+//some basic refactoring/cleanup
+
+
 
 #include <assert.h>
 #include <stdio.h>
@@ -58,6 +60,8 @@
 #define false 0
 
 #define DEBUG 1
+
+#define DEBUG_FLYTHROUGH 0
 
 #define PARTICLE_COUNT 300
 
@@ -423,7 +427,7 @@ void draw_sky(float angle_x, int sky_shader, int sky_vao, int sky_texture, int t
     
 }
 
-void draw_object(int model_shader, int model_vao, int vertex_count, Vec3 pos, Vec3 camera, Mat4 perspective, Mat4 *bone_animation_matrices, int transform_loc, int perspective_loc, int *bone_matrices_locations, float model_angle_x, float model_angle_y, float camera_angle_x, float camera_angle_y, float animation_angle_x, float animation_angle_y, float animation_angle_z)
+void draw_animated_object(int model_shader, int model_vao, int vertex_count, Vec3 pos, Vec3 camera, Mat4 perspective, Mat4 *bone_animation_matrices, int transform_loc, int perspective_loc, int *bone_matrices_locations, float model_angle_x, float model_angle_y, float camera_angle_x, float camera_angle_y, float animation_angle_x, float animation_angle_y, float animation_angle_z)
 {
     //so in this case I think we want to
     //rotate THEN translate?
@@ -1051,7 +1055,7 @@ int main(int argc, char **argv)
     Skeleton_Node *skeleton_root_node = NULL;
 
     // rudy_ply.ply
-    model_load_failure = load_model_file("art/monkey_with_anim_y_up.dae", "art/rudy_rigged_simple.ply", &model_vao, &model_vertices, &model_normals, &model_colors, &bone_offset_matrices, &bone_ids, &model_vertex_count, &bone_count, &skeleton_root_node, &animation_duration);
+    model_load_failure = load_model_file("art/rudy_rigged_better.fbx", "art/rudy_rigged_simple.ply", &model_vao, &model_vertices, &model_normals, &model_colors, &bone_offset_matrices, &bone_ids, &model_vertex_count, &bone_count, &skeleton_root_node, &animation_duration);
     if (model_load_failure) {
 	printf("Hold on a model didn't load\n");
 	return -1;
@@ -1260,8 +1264,16 @@ int main(int argc, char **argv)
 
 
 
+    Vec2 mouse_x_current;
+
+    Vec2 mouse_y_last;
+
+
     
-    
+    //may need this 
+    SDL_SetRelativeMouseMode(SDL_TRUE);
+
+    Vec3 camera_heading = vec3_init(0.0f, 0.0f, 0.0f);
     
     while (running) {
 	current_time = SDL_GetTicks();
@@ -1272,8 +1284,11 @@ int main(int argc, char **argv)
 	total_time_ms += dt;
 	const Uint8* keys = SDL_GetKeyboardState(NULL);
 
+	int mouse_dx, mouse_dy;
+	SDL_GetMouseState(&mouse_dx, &mouse_dy);
+	SDL_GetRelativeMouseState(&mouse_dx, &mouse_dy);
+	float player_speed = 0.0f;
 	
-
 	//temporary semi-global animation timing
 	animation_timer += (dt*0.25);
 	if (animation_timer > animation_duration) {
@@ -1282,6 +1297,11 @@ int main(int argc, char **argv)
 	    //animation_timer = animation_duration - animation_timer;
 	    animation_timer = 0.0f;
 	    //printf("resetting to a value of %f\n", animation_timer);
+	}
+
+	if (keys[SDL_SCANCODE_ESCAPE]) {
+	    running = false;
+	    break;
 	}
 
 	if (keys[SDL_SCANCODE_UP]) {
@@ -1309,18 +1329,69 @@ int main(int argc, char **argv)
 	}
 
 	//tgfh for MACK
+	//note this is, apparently, the axis ABOUT which you rotate
+	//so rotating ABOUT the x axis looks up and down.
+	//unless i'm feeding these into the wrong
+	//place
+	float mouse_sensitivity = 5.0f;
+	camera_angle_y -= (mouse_dx * mouse_sensitivity * dt);
+	camera_angle_x -= (mouse_dy * mouse_sensitivity * dt);
+	const float player_speed_constant = 2.5f;
+	Vec2 player_strafe_vec = vec2_init(0.0f, 0.0f);
 	if (keys[SDL_SCANCODE_T]) {
-	    camera_angle_x += 100*dt;
+	    player_speed = player_speed_constant;
+	    player_strafe_vec.y = 1.0f;
+	    //camera_angle_x += 100*dt;
 	}
 	if (keys[SDL_SCANCODE_G]) {
-	    camera_angle_x -= 100*dt;
+	    player_speed = -player_speed_constant;
+	    player_strafe_vec.y = -1.0f;
+	    //camera_angle_x -= 100*dt;
 	}
 	if (keys[SDL_SCANCODE_F]) {
-	    camera_angle_y += 100*dt;
+	    player_strafe_vec.x = 1.0f;
+	    //camera_angle_y += 100*dt;
 	}
 	if (keys[SDL_SCANCODE_H]) {
-	    camera_angle_y -= 100*dt;
+	    player_strafe_vec.x = -1.0f;
+	    //camera_angle_y -= 100*dt;
 	}
+	if (vec2_mag(player_strafe_vec) != 0.0f) {
+	    //maybe check for float error
+	    player_strafe_vec = vec2_normalize(player_strafe_vec);
+	}
+
+	camera_heading.x = sin_deg(camera_angle_y);
+	//camera_heading.y = -sin_deg(camera_angle_x);
+	camera_heading.z = -cos_deg(camera_angle_y);
+	//camera_heading = vec3_normalize(camera_heading);
+	//strafing is a bit weird
+	//we have a HEADING along the x-z axis
+	//and fowards/backwards *ALWAYS* simply move us foward or backwards
+	//and left/right *ALWAYS* adds perpendicular motion to this point
+
+	//try this
+	//make 2 vec2s
+	Vec2 mouse_heading = vec2_init(sin_deg(camera_angle_y) * player_strafe_vec.y, -cos_deg(camera_angle_y) * player_strafe_vec.y);
+	Vec2 strafe_heading = vec2_init(sin_deg(camera_angle_y + 90.0f) * player_strafe_vec.x, -cos_deg(camera_angle_y + 90.0f) * player_strafe_vec.x);
+	Vec2 vec2_player_heading = vec2_add(mouse_heading, strafe_heading);
+	if (vec2_mag(vec2_player_heading) != 0.0f) {
+	    vec2_player_heading = vec2_normalize(vec2_player_heading);
+	}
+	camera_heading.x = vec2_player_heading.x;
+	camera_heading.z = vec2_player_heading.y;
+	camera_heading.y = 0.0f;
+
+	#if DEBUG_FLYTHROUGH
+	camera_heading.x = sin_deg(camera_angle_y);
+	camera_heading.y = -sin_deg(camera_angle_x);
+	camera_heading.z = -cos_deg(camera_angle_y);
+	#endif
+	
+
+
+	camera = vec3_add(camera, vec3_scale(camera_heading, dt * player_speed_constant));
+	
 
 	int bone_to_animate = 3;
 
@@ -1357,7 +1428,7 @@ int main(int argc, char **argv)
 	}
 
 	
-	skeleton_animate(skeleton_root_node, animation_timer, mat4_create_identity(), bone_offset_matrices, bone_animation_matrices);//TODO: create mat4 *bone_animation_matrices of size .. ? ..in main scope and init each with to mat4_identity
+	//skeleton_animate(skeleton_root_node, animation_timer, mat4_create_identity(), bone_offset_matrices, bone_animation_matrices);//TODO: create mat4 *bone_animation_matrices of size .. ? ..in main scope and init each with to mat4_identity
 	
 	
 
@@ -1378,7 +1449,7 @@ int main(int argc, char **argv)
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	
 	
-	draw_object(basic_shader_program, model_vao, model_vertex_count, triangle_pos, camera, perspective, bone_animation_matrices, basic_transform_loc, basic_perspective_loc, bone_matrices_locations, model_angle_x, model_angle_y, camera_angle_x, camera_angle_y, animation_angle_x, animation_angle_y, animation_angle_z);
+	draw_animated_object(basic_shader_program, model_vao, model_vertex_count, triangle_pos, camera, perspective, bone_animation_matrices, basic_transform_loc, basic_perspective_loc, bone_matrices_locations, model_angle_x, model_angle_y, camera_angle_x, camera_angle_y, animation_angle_x, animation_angle_y, animation_angle_z);
 
 
 	Vec3 emitter_pos = vec3_init(0.0f, 0.0f, 1.0f);
