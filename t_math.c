@@ -631,6 +631,38 @@ Mat4 mat4_scale(Mat4 a, float scalar)
     return result;
 }
 
+Mat4 mat4_embedded_scale(Mat4 a, float scalar)
+{
+    Mat4 result;
+    for (int i = 0; i < 3; i++) {
+	for (int j = 0; j < 3; j++) {
+	    mat4(result, i, j) = mat4(a, i, j) * scalar;
+	}
+    }
+
+    return result;
+}
+
+Mat4 mat4_create_embedded_scale(float scalar)
+{
+    Mat4 result = mat4_create_identity();
+    mat4(result, 0, 0) = scalar;
+    mat4(result, 1, 1) = scalar;
+    mat4(result, 2, 2) = scalar;
+
+    return result;
+}
+
+Mat4 mat4_create_xyz_scale(float x, float y, float z)
+{
+    Mat4 result = mat4_create_identity();
+    mat4(result, 0, 0) = x;
+    mat4(result, 1, 1) = y;
+    mat4(result, 2, 2) = z;
+
+    return result;
+}
+
 Mat4 mat4_from_vec4_row(Vec4 r0, Vec4 r1, Vec4 r2, Vec4 r3)
 {
     Mat4 result;

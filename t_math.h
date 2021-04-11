@@ -197,6 +197,9 @@ Mat4 mat4_from_quaternion(Quaternion q);
 Mat4 mat4_transpose(Mat4 a);
 Mat4 mat4_create_scale_from_float(float s);
 Mat4 mat4_create_scale_from_vec(Vec3 v);
+Mat4 mat4_embedded_scale(Mat4 a, float scalar);
+Mat4 mat4_create_embedded_scale(float scalar);
+Mat4 mat4_create_xyz_scale(float x, float y, float z);
 
 float quaternion_mag(Quaternion q);
 

@@ -38,6 +38,13 @@
 //(eventually via quaternions??)
 //some basic refactoring/cleanup
 
+//TODAY:
+//-start making a LEVEL
+//make a skybox
+//make better ground
+
+//call create ground, load ground, load associated shader
+
 
 
 #include <assert.h>
@@ -61,7 +68,7 @@
 
 #define DEBUG 1
 
-#define DEBUG_FLYTHROUGH 0
+#define DEBUG_FLYTHROUGH 1
 
 #define PARTICLE_COUNT 300
 
@@ -116,6 +123,128 @@ typedef struct Skeleton_Node_t {
     int bone_index;
 } Skeleton_Node;
 
+typedef struct {
+    Vec3 position;
+    //should these be a quaternion?
+    float angle_x;
+    float angle_y;
+    float angle_z;
+} Camera;
+
+float *create_ground_grid(int width, int length, float height, float scale, int *size_of_ground)
+{
+    //return an array of x,y,z co-ords for some ground
+    //kinda like constructing a mesh
+    //we'll start 'flat', in the sense of making a 2D grid with various heights
+    //each point has 3 components
+    //we'll need normals later -> this will just take pointers and fill them out
+    //rather than returning ground
+
+    //we actually need to make triangles, not just vertices
+    *size_of_ground =  3 * length * width * sizeof(float);
+    float *ground = (float*)malloc(*size_of_ground);
+    //what we actually need to do...
+    // the grid
+    // * * * *
+    // * * * *
+    
+
+    //this just makes a level 2d grid
+    for (int i = 0; i < length; i++) {
+	for (int j = 0; j < width * 3 ; j+=3) {
+	    
+	    //maybe draw this out to check
+	    float x = (float) j / (float) (width * 3);
+	    float y = height * sin(i + j);
+	    float z = (float) i / (float) length;;
+	    printf("insetring %f, %f, %f\n", x, y, z);
+	    printf("at indices %d, %d, %d", (i * width*3) + j, (i * width*3) + j + 1, (i * width*3) + j + 2);
+	    ground[(i * width*3) + j] = x * scale;
+	    ground[(i * width*3) + j + 1] = y;
+	    ground[(i * width*3) + j + 2] = z * scale;
+	}
+    }
+    
+    return ground;
+}
+
+uint *create_ground_indices(int width, int length, int *size_of_elements, int *amount_of_elements)
+{
+
+    //a1....a2/b1
+    //.   .  .
+    //. .    .
+    //..     .
+    //.      .
+    //a3/b3..b2
+    *size_of_elements = (width-1) * (length-1) * 6 * sizeof(uint);
+    *amount_of_elements = (width-1) * (length-1) * 6;
+    uint *indices = (uint*)malloc(*size_of_elements);
+    #if 0
+    indices[0] = 0;
+    indices[1] = 1;
+    indices[2] = 2;
+
+    indices[3] = 1;
+    indices[4] = 3;
+    indices[5] = 2;
+    #endif
+    #if 1
+    for (int i = 0; i < (length - 1); i++) {
+	for (int j = 0; j < ((width - 1) ); j++) {
+	    int a1 = (i * width) + j;
+	    int a2 = (i * width) + j + 1;
+	    int a3 = ((i+1) * width) + j;
+
+	    int b1 = (i * width) + j + 1;
+	    int b2 = ((i+1) * width) + j + 1;
+	    int b3 = ((i+1) * width) + j;
+	    indices[(i * (width-1)*6) + j*6] = a1;
+	    indices[(i * (width-1)*6) + j*6 + 1] = a2;
+	    indices[(i * (width-1)*6) + j*6 + 2] = a3;
+
+	    indices[(i * (width-1)*6) + j*6 + 3] = b1;
+	    indices[(i * (width-1)*6) + j*6 + 4] = b2;
+	    indices[(i * (width-1)*6) + j*6 + 5] = b3;
+	}
+    }
+    #endif
+    return indices;
+}
+
+uint load_ground(float *ground, uint *elements, int size_of_ground, int size_of_elements)
+{
+    //use GLuint?
+    uint vao;
+    uint vbo;
+    uint ebo;
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
+    
+    glGenBuffers(1, &vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, size_of_ground, ground, GL_STATIC_DRAW);
+
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+
+    glGenBuffers(1, &ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, size_of_elements, elements, GL_STATIC_DRAW);
+    
+
+    //do we have to unbind?
+    //may as well
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    
+
+    return vao;
+}
+
 boolean import_skeleton_node(struct aiNode *assimp_node, Skeleton_Node **skeleton_node, int bone_count, char bone_names[][64])//this might be cpp nonsense
 {
     //function will work like this:
@@ -127,7 +256,7 @@ boolean import_skeleton_node(struct aiNode *assimp_node, Skeleton_Node **skeleto
 
     strcpy(temp->name, assimp_node->mName.data);//this may fuck us up
 
-    printf("-node name = %s\n", temp->name);
+    //printf("-node name = %s\n", temp->name);
     temp->num_children = 0;
     //bunch of other stuff to init
     temp->position_keys = NULL;
@@ -143,7 +272,7 @@ boolean import_skeleton_node(struct aiNode *assimp_node, Skeleton_Node **skeleto
     temp->num_scale_keys = 0;
     
     
-    printf("node has %d children\n", (int)assimp_node->mNumChildren);
+    //printf("node has %d children\n", (int)assimp_node->mNumChildren);
     temp->bone_index = -1;
     for (int i = 0; i < MAX_BONES; i++) {
 	temp->children[i] = NULL;//init to zero
@@ -151,7 +280,7 @@ boolean import_skeleton_node(struct aiNode *assimp_node, Skeleton_Node **skeleto
     boolean has_bone = false;
     for (int i = 0; i < bone_count; i++) {
 	if (strcmp(bone_names[i], temp->name) == 0) {
-	    printf("node uses bone %i\n", i);
+	    //printf("node uses bone %i\n", i);
 	    temp->bone_index = i;
 	    has_bone = true;
 	    break;
@@ -159,9 +288,9 @@ boolean import_skeleton_node(struct aiNode *assimp_node, Skeleton_Node **skeleto
     }
 
     if (!has_bone) {
-	printf("No bone found\n");
+	//printf("No bone found\n");
     } else {
-	printf("found a BONE, ey?\n");
+	//printf("found a BONE, ey?\n");
     }
 
     boolean has_useful_child = false;
@@ -174,7 +303,7 @@ boolean import_skeleton_node(struct aiNode *assimp_node, Skeleton_Node **skeleto
 	    has_useful_child = true;
 	    temp->num_children++;
 	} else {
-	    printf("useless child culled\n");
+	    //printf("useless child culled\n");
 	}
     }
 
@@ -544,6 +673,139 @@ void draw_particles(int particle_shader, int particle_vao, int particle_count, f
 
 void draw_quad_model()
 {
+}
+
+void draw_skybox(int quad_shader, int quad_vao, float camera_angle_x, float camera_angle_y, float camera_angle_z, Vec3 camera, int quad_texture, int quad_texture_loc, int transform_loc, int perspective_loc, Mat4 perspective)
+{
+    //basically the idea is to make a rotated quad, then translate back, to some constant
+    // 'horizon' distance, and render there
+    //the distance should be large enough that distant objects won't have their z-ordering
+    //messed up
+    //ideally we'd do an infinite draw distance,
+    //which we *can* do, but we'll just need to adjust our perspective matrix for that
+    float bottom_rotate_x = 90.0f;
+    float bottom_rotate_y = 0.0f;
+    float bottom_rotate_z = 0.0f;
+
+    float top_rotate_x = 90.0f;
+    float top_rotate_y = 0.0f;
+    float top_rotate_z = 0.0f;
+
+    float left_rotate_x = 0.0f;
+    float left_rotate_y = 0.0f;
+    float left_rotate_z = 0.0f;
+    
+    float right_rotate_x = 0.0f;
+    float right_rotate_y = 0.0f;
+    float right_rotate_z = 0.0f;
+
+    float front_rotate_x = 0.0f;
+    float front_rotate_y = 0.0f;
+    float front_rotate_z = 0.0f;
+
+    float back_rotate_x = 0.0f;
+    float back_rotate_y = 0.0f;
+    float back_rotate_z = 0.0f;
+
+    
+}
+
+void draw_ground(int quad_shader, int quad_vao, int element_count, float camera_angle_x, float camera_angle_y, float camera_angle_z, Vec3 ground_pos, Vec3 camera, int quad_texture, int quad_texture_loc, int transform_loc, int perspective_loc, Mat4 perspective)
+{
+    Mat3 camera_rotate_x = mat3_create_rotate_x(camera_angle_x);
+    Mat3 camera_rotate_y = mat3_create_rotate_y(camera_angle_y);
+
+    Mat4 camera_rotate = mat4_from_mat3(mat3_mult(camera_rotate_x, camera_rotate_y));
+
+    float ground_rotate_x = 90.0f;
+    float ground_rotate_y = 0.0f;
+
+    Mat3 model_rotate_x = mat3_create_rotate_x(ground_rotate_x);
+    Mat3 model_rotate_y = mat3_create_rotate_y(ground_rotate_y);
+    Mat3 model_rotate_x_y = mat3_mult(model_rotate_x, model_rotate_y);
+    Mat4 model_rotation = mat4_from_mat3(model_rotate_x_y);
+    Mat4 model_translation = mat4_create_translation(ground_pos);
+    Mat4 model_scale = mat4_create_xyz_scale(100.0f, 1.0f, 100.0f);
+    //model_translation = mat4_embedded_scale(model_translation, 10.0f);
+    //we COULD scale here?
+    Mat4 mrt = mat4_mult(mat4_mult(model_scale, model_translation), model_rotation);
+    //Mat4 mrt = mat4_mult(model_translation, model_rotation);
+
+    Mat4 camera_transformation = mat4_create_translation(camera);
+    camera_transformation = mat4_mult(camera_rotate, camera_transformation);
+
+    //
+    Mat4 transformation = mat4_mult(camera_transformation, mrt);
+    //transformation = mat4_scale(transformation, 0.5f);
+
+    glUseProgram(quad_shader);
+    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, transformation.elements);
+    glUniformMatrix4fv(perspective_loc, 1, GL_FALSE, perspective.elements);
+    
+    //how do we know it's texture 0?
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, quad_texture);
+    
+    
+    glBindVertexArray(quad_vao);//this also binds the EBO
+    glDrawElements(GL_TRIANGLES, element_count, GL_UNSIGNED_INT, 0);
+}
+
+void draw_untextured_ground(int quad_shader, int quad_vao, int element_count, float camera_angle_x, float camera_angle_y, float camera_angle_z, Vec3 ground_pos, Vec3 camera, int transform_loc, int perspective_loc, Mat4 perspective)
+{
+    Mat3 camera_rotate_x = mat3_create_rotate_x(camera_angle_x);
+    Mat3 camera_rotate_y = mat3_create_rotate_y(camera_angle_y);
+
+    Mat4 camera_rotate = mat4_from_mat3(mat3_mult(camera_rotate_x, camera_rotate_y));
+
+    float ground_rotate_x = 0.0f;
+    float ground_rotate_y = 0.0f;
+
+    Mat3 model_rotate_x = mat3_create_rotate_x(ground_rotate_x);
+    Mat3 model_rotate_y = mat3_create_rotate_y(ground_rotate_y);
+    Mat3 model_rotate_x_y = mat3_mult(model_rotate_x, model_rotate_y);
+    Mat4 model_rotation = mat4_from_mat3(model_rotate_x_y);
+    Mat4 model_translation = mat4_create_translation(ground_pos);
+    //Mat4 model_scale = mat4_create_xyz_scale(100.0f, 1.0f, 100.0f);
+    //model_translation = mat4_embedded_scale(model_translation, 10.0f);
+    //we COULD scale here?
+    Mat4 mrt = mat4_mult(model_translation, model_rotation);
+    //Mat4 mrt = mat4_mult(model_translation, model_rotation);
+
+    Mat4 camera_transformation = mat4_create_translation(camera);
+    camera_transformation = mat4_mult(camera_rotate, camera_transformation);
+
+    //
+    Mat4 transformation = mat4_mult(camera_transformation, mrt);
+    //transformation = mat4_scale(transformation, 0.5f);
+
+    glUseProgram(quad_shader);
+    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, transformation.elements);
+    glUniformMatrix4fv(perspective_loc, 1, GL_FALSE, perspective.elements);
+    
+    //how do we know it's texture 0?
+
+
+    
+    
+    glBindVertexArray(quad_vao);
+    glDrawElements(GL_TRIANGLES, element_count, GL_UNSIGNED_INT, 0);
+}
+
+void draw_quad(float angle_x, float angle_y, float angle_z, Vec3 camera, int quad_shader, int quad_vao, int quad_texture, int transform_loc, int perspective_loc, Mat4 perspective)
+{
+    //how do we know it's texture 0?
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, quad_texture);
+    
+    glUseProgram(quad_shader);
+    //glUniform1f(time_ms_loc, current_time_ms);
+    //glUniform4f(vertex_color_location, 0.3f, green_value, 0.3f, 1.0f);
+    //glUniform3f(offset_location, green_value, red_value, 0.0f);
+
+    //glUniformMatrix4fv(transform_loc, 1, GL_FALSE, rot_trans_out);
+    glBindVertexArray(quad_vao);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
 void draw_animated_quad(Vec3 camera, Vec3 model, float model_angle, GLuint shader, GLuint vao, int time_loc, int transform_loc, float current_time)
@@ -1066,7 +1328,6 @@ int main(int argc, char **argv)
 
 
     
-    
 
     
     unsigned int vertex_indices_a[] = {
@@ -1118,6 +1379,32 @@ int main(int argc, char **argv)
 	return -1;
     }
 
+    int size_of_ground;
+    int ground_width = 10;
+    int ground_length = 10;
+    float ground_height = 0.2f;
+    float ground_scale = 10.0;
+    
+    float *ground = create_ground_grid(ground_width, ground_length, ground_height, ground_scale, &size_of_ground);
+    for (int i = 0 ; i < (ground_width * ground_length * 3); i++) {
+	printf("i = %d\n", i);
+	printf("ground co-ord is %f\n", ground[i]);
+    }
+
+    uint ground_element_count;
+    uint size_of_elements;
+    uint *ground_indices = create_ground_indices(ground_width, ground_length, &size_of_elements, &ground_element_count);
+    uint ground_vao = load_ground(ground, ground_indices, size_of_ground, size_of_elements);
+
+    for (int i = 0; i < ground_element_count; i++) {
+	printf("element is %d\n", ground_indices[i]);
+    }
+    uint ground_shader;
+    shader_fault= load_shader_program(&ground_shader, "ground.vert", "ground.frag");
+    if (shader_fault) {
+	printf("your shader has a problem homie\n");
+	return -1;
+    }
 
     unsigned int test_vaos[1];
     glGenVertexArrays(1, test_vaos);
@@ -1173,7 +1460,7 @@ int main(int argc, char **argv)
     //WRAP THIS
     //load image
     int imwidth, imheight, nchannels;
-    unsigned char *imdata = stbi_load("art/crap_cloud.png", &imwidth, &imheight, &nchannels, 0);
+    unsigned char *imdata = stbi_load("art/sand_first_pass.png", &imwidth, &imheight, &nchannels, 0);
 
     unsigned int test_texture;
     glGenTextures(1, &test_texture);
@@ -1189,8 +1476,8 @@ int main(int argc, char **argv)
 
     //set our sampler uniforms
     int tex1location = glGetUniformLocation(shader_program, "ourTexture");    
-    int res_location = glGetUniformLocation(shader_program, "u_resolution");
-    int time_ms_location = glGetUniformLocation(shader_program, "time_ms");
+    //int res_location = glGetUniformLocation(shader_program, "u_resolution");
+    //int time_ms_location = glGetUniformLocation(shader_program, "time_ms");
     
     
     
@@ -1215,6 +1502,8 @@ int main(int argc, char **argv)
     Vec3 camera = vec3_init(0.0f, 0.0f, 0.0f);
     Vec3 triangle_pos = vec3_init(0.0f, 0.0f, 0.0f);
     int transform_loc = glGetUniformLocation(shader_program, "transform");
+    int perspective_loc = glGetUniformLocation(shader_program, "perspective");
+    
     int basic_transform_loc = glGetUniformLocation(basic_shader_program, "transform");
     int basic_perspective_loc = glGetUniformLocation(basic_shader_program, "perspective");
 
@@ -1222,7 +1511,10 @@ int main(int argc, char **argv)
     int particle_perspective_loc = glGetUniformLocation(particle_shader_program, "perspective");
     int particle_emitter_loc = glGetUniformLocation(particle_shader_program, "emitter_position_world");
     int particle_time_loc = glGetUniformLocation(particle_shader_program, "time_elapsed");
-    
+
+
+    int ground_transform_loc = glGetUniformLocation(ground_shader, "transform");
+    int ground_perspective_loc = glGetUniformLocation(ground_shader, "perspective");
 
     float rot_angle = 0.0f;
 
@@ -1245,7 +1537,7 @@ int main(int argc, char **argv)
     float animation_timer = 0.0;
 
     float resolution[2] = {(float)SCREENWIDTH, (float)SCREENHEIGHT};
-    glUniform2f(res_location, resolution[0], resolution[1]);
+    //glUniform2f(res_location, resolution[0], resolution[1]);
 
     int bone_matrices_locations[MAX_BONES];
 
@@ -1274,6 +1566,8 @@ int main(int argc, char **argv)
     SDL_SetRelativeMouseMode(SDL_TRUE);
 
     Vec3 camera_heading = vec3_init(0.0f, 0.0f, 0.0f);
+
+    Vec3 ground_pos = vec3_init(0.0f, -0.5f, 0.0f);
     
     while (running) {
 	current_time = SDL_GetTicks();
@@ -1382,16 +1676,19 @@ int main(int argc, char **argv)
 	camera_heading.z = vec2_player_heading.y;
 	camera_heading.y = 0.0f;
 
+	
+
 	#if DEBUG_FLYTHROUGH
 	camera_heading.x = sin_deg(camera_angle_y);
 	camera_heading.y = -sin_deg(camera_angle_x);
 	camera_heading.z = -cos_deg(camera_angle_y);
-	#endif
+	camera = vec3_add(camera, vec3_scale(camera_heading, dt * player_speed));
+	#else
 	
 
 
 	camera = vec3_add(camera, vec3_scale(camera_heading, dt * player_speed_constant));
-	
+	#endif
 
 	int bone_to_animate = 3;
 
@@ -1447,6 +1744,12 @@ int main(int argc, char **argv)
 	glViewport(0, 0, SCREENWIDTH, SCREENHEIGHT);
 	glClearColor(0.01f, 0.01f, 0.15f, 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	
+
+	//draw_ground(shader_program, test_vaos[0], camera_angle_x, camera_angle_y, camera_angle_z, ground_pos, camera, test_texture, tex1location, transform_loc, perspective_loc, perspective);
+
+	draw_untextured_ground(ground_shader, ground_vao, ground_element_count, camera_angle_x, camera_angle_y, camera_angle_z, ground_pos, camera, ground_transform_loc, ground_perspective_loc, perspective);
 	
 	
 	draw_animated_object(basic_shader_program, model_vao, model_vertex_count, triangle_pos, camera, perspective, bone_animation_matrices, basic_transform_loc, basic_perspective_loc, bone_matrices_locations, model_angle_x, model_angle_y, camera_angle_x, camera_angle_y, animation_angle_x, animation_angle_y, animation_angle_z);
