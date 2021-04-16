@@ -45,6 +45,8 @@
 
 //call create ground, load ground, load associated shader
 
+//sky box as a shader
+//render quads with gradients for 
 
 
 #include <assert.h>
@@ -157,8 +159,8 @@ float *create_ground_grid(int width, int length, float height, float scale, int 
 	    float x = (float) j / (float) (width * 3);
 	    float y = height * sin(i + j);
 	    float z = (float) i / (float) length;;
-	    printf("insetring %f, %f, %f\n", x, y, z);
-	    printf("at indices %d, %d, %d", (i * width*3) + j, (i * width*3) + j + 1, (i * width*3) + j + 2);
+	    //printf("insetring %f, %f, %f\n", x, y, z);
+	    //printf("at indices %d, %d, %d", (i * width*3) + j, (i * width*3) + j + 1, (i * width*3) + j + 2);
 	    ground[(i * width*3) + j] = x * scale;
 	    ground[(i * width*3) + j + 1] = y;
 	    ground[(i * width*3) + j + 2] = z * scale;
@@ -675,7 +677,7 @@ void draw_quad_model()
 {
 }
 
-void draw_skybox(int quad_shader, int quad_vao, float camera_angle_x, float camera_angle_y, float camera_angle_z, Vec3 camera, int quad_texture, int quad_texture_loc, int transform_loc, int perspective_loc, Mat4 perspective)
+void draw_skybox(uint shader, uint vao, float camera_angle_x, float camera_angle_y, float camera_angle_z, Vec3 camera, int transform_loc, int perspective_loc, Mat4 perspective)
 {
     //basically the idea is to make a rotated quad, then translate back, to some constant
     // 'horizon' distance, and render there
@@ -683,29 +685,94 @@ void draw_skybox(int quad_shader, int quad_vao, float camera_angle_x, float came
     //messed up
     //ideally we'd do an infinite draw distance,
     //which we *can* do, but we'll just need to adjust our perspective matrix for that
-    float bottom_rotate_x = 90.0f;
-    float bottom_rotate_y = 0.0f;
-    float bottom_rotate_z = 0.0f;
 
-    float top_rotate_x = 90.0f;
-    float top_rotate_y = 0.0f;
-    float top_rotate_z = 0.0f;
+    //the rotate/translate deserves an explanation as
+    //it's a little weird
+    Mat3 camera_rotate_x = mat3_create_rotate_x(camera_angle_x);
+    Mat3 camera_rotate_y = mat3_create_rotate_y(camera_angle_y);
 
-    float left_rotate_x = 0.0f;
-    float left_rotate_y = 0.0f;
-    float left_rotate_z = 0.0f;
+    Mat4 camera_rotate = mat4_from_mat3(mat3_mult(camera_rotate_x, camera_rotate_y));
+
+    Mat4 camera_translate = mat4_create_translation(vec3_init(0.0f, 0.0f, 100.0f));
+
     
-    float right_rotate_x = 0.0f;
-    float right_rotate_y = 0.0f;
-    float right_rotate_z = 0.0f;
+    
+    Mat4 skybox_transformation = mat4_mult(camera_rotate, camera_translate);
 
-    float front_rotate_x = 0.0f;
-    float front_rotate_y = 0.0f;
-    float front_rotate_z = 0.0f;
+    glUseProgram(shader);
 
-    float back_rotate_x = 0.0f;
-    float back_rotate_y = 0.0f;
-    float back_rotate_z = 0.0f;
+    int side_loc = glGetUniformLocation(shader, "side");
+    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, skybox_transformation.elements);
+    glUniformMatrix4fv(perspective_loc, 1, GL_FALSE, perspective.elements);
+
+    glUniform1i(side_loc, 1);
+    glBindVertexArray(vao);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+    //now draw another side
+
+    
+    glUniform1i(side_loc, 2);
+    camera_rotate_y = mat3_create_rotate_y(camera_angle_y + 90.0f);
+    
+
+    camera_rotate = mat4_from_mat3(mat3_mult(camera_rotate_x, camera_rotate_y));
+
+    camera_translate = mat4_create_translation(vec3_init(0.0f, 0.0f, 100.0f));
+    skybox_transformation = mat4_mult(camera_rotate, camera_translate);
+    
+    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, skybox_transformation.elements);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+    glUniform1i(side_loc, 3);
+    camera_rotate_y = mat3_create_rotate_y(camera_angle_y + 180.0f);
+    
+    camera_rotate = mat4_from_mat3(mat3_mult(camera_rotate_x, camera_rotate_y));
+
+    camera_translate = mat4_create_translation(vec3_init(0.0f, 0.0f, 100.0f));
+    
+    skybox_transformation = mat4_mult(camera_rotate, camera_translate);
+    
+    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, skybox_transformation.elements);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+    glUniform1i(side_loc, 4);
+
+    
+    camera_rotate_y = mat3_create_rotate_y(camera_angle_y + 270);
+    
+    camera_rotate = mat4_from_mat3(mat3_mult(camera_rotate_x, camera_rotate_y));
+
+    camera_translate = mat4_create_translation(vec3_init(0.0f, 0.0f, 100.0f));
+    
+
+    skybox_transformation = mat4_mult(camera_rotate, camera_translate);
+    
+    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, skybox_transformation.elements);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+
+    //this one is a puzzle
+    //basically you have to consider that once you rotate,
+    //your new translation is relative to new axis
+    //so pushing along z actually pushes us up y!
+    //in all these cases we push along z, but
+    //it's a 'new' z (change of basis)
+    glUniform1i(side_loc, 5);
+    //camera_rotate_y = mat3_create_rotate_y(camera_angle_y);
+    Mat3 camera_rotate_z = mat3_create_rotate_z(camera_angle_y);
+    camera_rotate_y = mat3_create_identity();
+    camera_rotate_x = mat3_create_rotate_x(camera_angle_x - 90.0f);
+    camera_rotate = mat4_from_mat3(mat3_mult(camera_rotate_x, camera_rotate_z));
+
+    camera_translate = mat4_create_translation(vec3_init(0.0f, 0.0f, 100.0f));
+    
+    
+    skybox_transformation = mat4_mult(camera_rotate, camera_translate);
+    
+    
+    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, skybox_transformation.elements);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
     
 }
@@ -1284,6 +1351,15 @@ int main(int argc, char **argv)
     boolean running = true;
 
     //note we seem to be drawing upside down
+
+    //we need a cube for this?
+    //sorta but we maybe want multiple VAOs to switch for different
+    //'sides' of the skybox to render
+    //so actually just pass in large, world-edge quads
+    //and rotate as necessary
+    //maybe replace the 100 with a DEFINEd value
+    //alternatively,
+    //just always push each quad back via translation
     float vertices[] = {
 	//vertex 1, color 1, texture 1 bottom left
 	-1.0f, -1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
@@ -1294,6 +1370,46 @@ int main(int argc, char **argv)
 	//vertex 4, color 4, texture 4 top right
 	1.0f,   1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0, 1.0
     };
+    
+    
+    float skybox_vertices[] = {
+	-100.0f, -100.0f, 0.0f, //bottom left
+	100.0f, -100.0f, 0.0f,//bottom right
+	-100.0f, 100.0f, 0.0f,//top left
+	100.0f, 100.0f, 0.0f
+	
+    };
+    
+    
+
+    uint skybox_indices[] = {
+	0, 1, 2,
+	2, 1, 3
+    };
+
+    uint skybox_vao;
+    glGenVertexArrays(1, &skybox_vao);
+    glBindVertexArray(skybox_vao);
+    uint skybox_vbo;
+    glGenBuffers(1, &skybox_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, skybox_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(skybox_vertices), skybox_vertices, GL_STATIC_DRAW);
+    uint skybox_ebo;
+    glGenBuffers(1, &skybox_ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, skybox_ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(skybox_vertices), skybox_indices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    //unbind everything
+    glBindBuffer(GL_ARRAY_BUFFER, 0);//this 'unbinds' the vbo
+    glBindVertexArray(0);//this 'unbinds' the vao
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);//this 'unbinds' the vbo
+
+    //
+
+
+
 
     //this should be a quad
     //add texture coords to this to render a sprite
@@ -1379,26 +1495,38 @@ int main(int argc, char **argv)
 	return -1;
     }
 
+    uint skybox_shader;
+    shader_fault = load_shader_program(&skybox_shader, "sky.vert", "sky.frag");
+    if (shader_fault) {
+	printf("your shader has a problem homie\n");
+	return -1;
+    }
+
     int size_of_ground;
-    int ground_width = 10;
-    int ground_length = 10;
-    float ground_height = 0.2f;
-    float ground_scale = 10.0;
-    
+    int ground_width = 100;
+    int ground_length = 100;
+    float ground_height = 0.1f;
+    float ground_scale = 100.0;
+
+
+    //this looks more like a desert
+    //than it does nevada, atm
     float *ground = create_ground_grid(ground_width, ground_length, ground_height, ground_scale, &size_of_ground);
+    #if 0
     for (int i = 0 ; i < (ground_width * ground_length * 3); i++) {
 	printf("i = %d\n", i);
 	printf("ground co-ord is %f\n", ground[i]);
     }
-
+#endif
     uint ground_element_count;
     uint size_of_elements;
     uint *ground_indices = create_ground_indices(ground_width, ground_length, &size_of_elements, &ground_element_count);
     uint ground_vao = load_ground(ground, ground_indices, size_of_ground, size_of_elements);
-
+#if 0
     for (int i = 0; i < ground_element_count; i++) {
 	printf("element is %d\n", ground_indices[i]);
     }
+    #endif
     uint ground_shader;
     shader_fault= load_shader_program(&ground_shader, "ground.vert", "ground.frag");
     if (shader_fault) {
@@ -1436,6 +1564,7 @@ int main(int argc, char **argv)
     glBindBuffer(GL_ARRAY_BUFFER, 0);//this 'unbinds' the vbo
     glBindVertexArray(0);//this 'unbinds' the vao
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);//this 'unbinds' the vbo
+    
 
 
 
@@ -1516,9 +1645,16 @@ int main(int argc, char **argv)
     int ground_transform_loc = glGetUniformLocation(ground_shader, "transform");
     int ground_perspective_loc = glGetUniformLocation(ground_shader, "perspective");
 
+    int skybox_transform_loc = glGetUniformLocation(skybox_shader, "transform");
+    int skybox_perspective_loc = glGetUniformLocation(skybox_shader, "perspective");
+    int skybox_resolution_loc = glGetUniformLocation(skybox_shader, "resolution");
+
+
+    
+
     float rot_angle = 0.0f;
 
-    Mat4 perspective = mat4_create_perspective(60.0f, 1280.0/720.0f, 0.1f, 100.0f);
+    Mat4 perspective = mat4_create_perspective(60.0f, 1280.0/720.0f, 0.1f, 1000.0f);
     
 
     //
@@ -1538,7 +1674,7 @@ int main(int argc, char **argv)
 
     float resolution[2] = {(float)SCREENWIDTH, (float)SCREENHEIGHT};
     //glUniform2f(res_location, resolution[0], resolution[1]);
-
+    glUniform2fv(skybox_resolution_loc, 1, resolution);
     int bone_matrices_locations[MAX_BONES];
 
     Mat4 test_identity = mat4_create_identity();
@@ -1744,6 +1880,20 @@ int main(int argc, char **argv)
 	glViewport(0, 0, SCREENWIDTH, SCREENHEIGHT);
 	glClearColor(0.01f, 0.01f, 0.15f, 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+
+
+
+
+
+
+
+
+
+	draw_skybox(skybox_shader, skybox_vao, camera_angle_x, camera_angle_y, camera_angle_z, camera, skybox_transform_loc, skybox_perspective_loc, perspective);
+	//Mat4 skybox_transform = mat4_create_translation_rotation(rotation, camera);
+	//not drawing?
+
 
 	
 
