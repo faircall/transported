@@ -46,7 +46,12 @@
 //call create ground, load ground, load associated shader
 
 //sky box as a shader
-//render quads with gradients for 
+//render quads with gradients
+
+//ISSUE:
+//we kind of want to map a sphere
+//onto the interior of a cube
+//
 
 
 #include <assert.h>
@@ -677,7 +682,7 @@ void draw_quad_model()
 {
 }
 
-void draw_skybox(uint shader, uint vao, float camera_angle_x, float camera_angle_y, float camera_angle_z, Vec3 camera, int transform_loc, int perspective_loc, Mat4 perspective)
+void draw_skybox(uint shader, uint vao, float camera_angle_x, float camera_angle_y, float camera_angle_z, Vec3 camera, int model_loc, int view_loc, int perspective_loc, Mat4 perspective)
 {
     //basically the idea is to make a rotated quad, then translate back, to some constant
     // 'horizon' distance, and render there
@@ -688,6 +693,8 @@ void draw_skybox(uint shader, uint vao, float camera_angle_x, float camera_angle
 
     //the rotate/translate deserves an explanation as
     //it's a little weird
+
+    
     Mat3 camera_rotate_x = mat3_create_rotate_x(camera_angle_x);
     Mat3 camera_rotate_y = mat3_create_rotate_y(camera_angle_y);
 
@@ -702,10 +709,16 @@ void draw_skybox(uint shader, uint vao, float camera_angle_x, float camera_angle
     glUseProgram(shader);
 
     int side_loc = glGetUniformLocation(shader, "side");
-    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, skybox_transformation.elements);
+    int viewing_angle_x_loc = glGetUniformLocation(shader, "viewing_angle_x");
+    int viewing_angle_y_loc = glGetUniformLocation(shader, "viewing_angle_y");
+    
+    glUniformMatrix4fv(model_loc, 1, GL_FALSE, camera_translate.elements);
+    glUniformMatrix4fv(view_loc, 1, GL_FALSE, camera_rotate.elements);
     glUniformMatrix4fv(perspective_loc, 1, GL_FALSE, perspective.elements);
 
     glUniform1i(side_loc, 1);
+    glUniform1f(viewing_angle_x_loc, deg_to_rad(camera_angle_y));
+    glUniform1f(viewing_angle_y_loc, deg_to_rad(camera_angle_x));
     glBindVertexArray(vao);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
@@ -721,7 +734,10 @@ void draw_skybox(uint shader, uint vao, float camera_angle_x, float camera_angle
     camera_translate = mat4_create_translation(vec3_init(0.0f, 0.0f, 100.0f));
     skybox_transformation = mat4_mult(camera_rotate, camera_translate);
     
-    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, skybox_transformation.elements);
+
+    glUniformMatrix4fv(model_loc, 1, GL_FALSE, camera_translate.elements);
+    glUniformMatrix4fv(view_loc, 1, GL_FALSE, camera_rotate.elements);
+    
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
     glUniform1i(side_loc, 3);
@@ -733,22 +749,31 @@ void draw_skybox(uint shader, uint vao, float camera_angle_x, float camera_angle
     
     skybox_transformation = mat4_mult(camera_rotate, camera_translate);
     
-    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, skybox_transformation.elements);
+
+    glUniformMatrix4fv(model_loc, 1, GL_FALSE, camera_translate.elements);
+    glUniformMatrix4fv(view_loc, 1, GL_FALSE, camera_rotate.elements);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
     glUniform1i(side_loc, 4);
 
     
-    camera_rotate_y = mat3_create_rotate_y(camera_angle_y + 270);
+    camera_rotate_y = mat3_create_rotate_y(camera_angle_y + 270.0f);
     
     camera_rotate = mat4_from_mat3(mat3_mult(camera_rotate_x, camera_rotate_y));
 
     camera_translate = mat4_create_translation(vec3_init(0.0f, 0.0f, 100.0f));
-    
+    //this hack seems necessary due to floaating point imprecision.
+    //maybe using a better pi approximation would have helped,
+    //on the other hand it's nice to be able to make these minute
+    //changes with full control over everything
+    Mat4 rough_scale = mat4_create_embedded_scale(1.01);
 
     skybox_transformation = mat4_mult(camera_rotate, camera_translate);
+    skybox_transformation = mat4_mult(skybox_transformation, rough_scale);
     
-    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, skybox_transformation.elements);
+
+    glUniformMatrix4fv(model_loc, 1, GL_FALSE, camera_translate.elements);
+    glUniformMatrix4fv(view_loc, 1, GL_FALSE, camera_rotate.elements);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
 
@@ -771,7 +796,9 @@ void draw_skybox(uint shader, uint vao, float camera_angle_x, float camera_angle
     skybox_transformation = mat4_mult(camera_rotate, camera_translate);
     
     
-    glUniformMatrix4fv(transform_loc, 1, GL_FALSE, skybox_transformation.elements);
+
+    glUniformMatrix4fv(model_loc, 1, GL_FALSE, camera_translate.elements);
+    glUniformMatrix4fv(view_loc, 1, GL_FALSE, camera_rotate.elements);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
     
@@ -1645,7 +1672,8 @@ int main(int argc, char **argv)
     int ground_transform_loc = glGetUniformLocation(ground_shader, "transform");
     int ground_perspective_loc = glGetUniformLocation(ground_shader, "perspective");
 
-    int skybox_transform_loc = glGetUniformLocation(skybox_shader, "transform");
+    int skybox_view_loc = glGetUniformLocation(skybox_shader, "view");
+    int skybox_model_loc = glGetUniformLocation(skybox_shader, "model");
     int skybox_perspective_loc = glGetUniformLocation(skybox_shader, "perspective");
     int skybox_resolution_loc = glGetUniformLocation(skybox_shader, "resolution");
 
@@ -1674,6 +1702,7 @@ int main(int argc, char **argv)
 
     float resolution[2] = {(float)SCREENWIDTH, (float)SCREENHEIGHT};
     //glUniform2f(res_location, resolution[0], resolution[1]);
+    glUseProgram(skybox_shader);
     glUniform2fv(skybox_resolution_loc, 1, resolution);
     int bone_matrices_locations[MAX_BONES];
 
@@ -1890,7 +1919,7 @@ int main(int argc, char **argv)
 
 
 
-	draw_skybox(skybox_shader, skybox_vao, camera_angle_x, camera_angle_y, camera_angle_z, camera, skybox_transform_loc, skybox_perspective_loc, perspective);
+	draw_skybox(skybox_shader, skybox_vao, camera_angle_x, camera_angle_y, camera_angle_z, camera, skybox_model_loc, skybox_view_loc, skybox_perspective_loc, perspective);
 	//Mat4 skybox_transform = mat4_create_translation_rotation(rotation, camera);
 	//not drawing?
 
