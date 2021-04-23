@@ -694,13 +694,20 @@ void draw_skybox(uint shader, uint vao, float camera_angle_x, float camera_angle
     //the rotate/translate deserves an explanation as
     //it's a little weird
 
+
+    //TODO: Just use ONE quad, that's translated but NOT rotated,
+    //and handle all the rotation INSIDE the fragment shader,
+    //with some uniform variables
+    //and angle info etc, to create the illusion of a horizon
+    //that changes depending on view angle
+    //
     
     Mat3 camera_rotate_x = mat3_create_rotate_x(camera_angle_x);
     Mat3 camera_rotate_y = mat3_create_rotate_y(camera_angle_y);
 
     Mat4 camera_rotate = mat4_from_mat3(mat3_mult(camera_rotate_x, camera_rotate_y));
 
-    Mat4 camera_translate = mat4_create_translation(vec3_init(0.0f, 0.0f, 100.0f));
+    Mat4 camera_translate = mat4_create_translation(vec3_init(0.0f, 0.0f, 95.0f));
 
     
     
@@ -722,6 +729,7 @@ void draw_skybox(uint shader, uint vao, float camera_angle_x, float camera_angle
     glBindVertexArray(vao);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
+    #if 0
     //now draw another side
 
     
@@ -800,7 +808,7 @@ void draw_skybox(uint shader, uint vao, float camera_angle_x, float camera_angle
     glUniformMatrix4fv(model_loc, 1, GL_FALSE, camera_translate.elements);
     glUniformMatrix4fv(view_loc, 1, GL_FALSE, camera_rotate.elements);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
+    #endif
     
 }
 

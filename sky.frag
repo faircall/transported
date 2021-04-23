@@ -17,6 +17,17 @@ uniform float viewing_angle_y;
 
 void main()
 {
+	//first:
+	//draw a 'sun' in the lower-center of the screen
+	//then 'shift' its center according to
+	//angle of the player?
+
+	float cx = 0.5f;
+	float cy = 0.5f;
+	float radius = 0.1f;
+
+
+
 	vec4 ndc;
 	ndc.x = ((gl_FragCoord.x / resolution.x) - 0.5f) * 2.0f;
 	ndc.y = ((gl_FragCoord.y / resolution.y) - 0.5f) * 2.0f;	
@@ -28,34 +39,15 @@ void main()
 	//but we want world space somehow
 	st.x = gl_FragCoord.x / (resolution.x);
 	st.y = gl_FragCoord.y / resolution.y;
+	vec3 side_color = vec3(0.0f, 0.0f, 0.0f);
 
-	float angle_x = viewing_angle_x;
-	float angle_y = viewing_angle_y;
-
-	float centre_x = 0.5;
-	float dist_from_centre = sqrt((centre_x - st.x) * (centre_x - st.x));
-
-
-	vec3 side_color = vec3(color_pos.x/resolution.x, color_pos.y/resolution.y, 0.0f);
-#if 0
-	if (side == 1) {
-	   side_color = vec3(1.0 - dist_from_centre*2.0f, 0.0f, 0.0);
+	float rotx = st.x - cos(viewing_angle_x);
+	float roty = 1.0f - (st.y + sin(viewing_angle_y));
+	if ((rotx - cx) * (rotx - cx) + (roty - cy)*(roty - cy) < radius*radius) {
+	   side_color = vec3(1.0f, 0.0f, 0.0f);
 	}
-	if (side == 2) {
-	   side_color = vec3(0.2 + 0.2*cos(angle_x), 0.0f, 0.0);		
-	}
-	if (side == 3) {
-	   side_color = vec3(0.2 + 0.2*cos(angle_x), 0.0f, 0.0);		
-
-	}
-	if (side == 4) {
-	   side_color = vec3(0.2 + 0.2*cos(angle_x), 0.0f, 0.0);		
-
-	}
-	if (side == 5) {
 	
-	   side_color = vec3(0.0f, 0.2*sin(angle_y), 0.0f);
-	}
-#endif
+
+
 	frag_color = vec4(side_color, 1.0f);
 }

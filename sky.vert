@@ -12,7 +12,7 @@ out vec3 color_pos;
 
 void main()
 {
-    mat4 transform = view * model;
+    mat4 transform = model;
     gl_Position = perspective * transform * vec4(pos, 1.0f);
 
     color_pos = vec3(model * vec4(pos,1.0f));
