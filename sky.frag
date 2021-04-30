@@ -45,17 +45,20 @@ void main()
 	st.y = gl_FragCoord.y / resolution.y;
 	vec3 side_color = vec3(0.0f, 0.0f, 0.0f);
 
+	float angle_x_normalized = viewing_angle_x / 2 * PI;
 
-	float rotx = (st.x - cos(viewing_angle_x*0.5f)); //between 0 and 2?
+	float angle_y_normalized = viewing_angle_y / 2 * PI;
+	
+	float rotx = (st.x - (angle_x_normalized)*0.5f);
 
 	//issue is this doesn't account for how
 	//far away it is
-	float roty = 1.0f - (st.y + sin(viewing_angle_y));
+	float roty = (st.y + angle_y_normalized);
 	
 	if ((rotx - cx) * (rotx - cx) + (roty - cy)*(roty - cy) < radius*radius) {
 	   side_color = vec3(1.0f, 1.0f, 0.0f);
 	} else {
-	   side_color = vec3(1.0f - min(1.0f, (rotx - cx)*(rotx - cx)), 0.0f, 0.0f);
+	   side_color = vec3(1.0f - min(1.0f, (rotx - cx)*(rotx - cx)) - min(1.0f, (roty - cy)*(roty - cy)), 0.0f, 0.0f);
 	}
 	
 
